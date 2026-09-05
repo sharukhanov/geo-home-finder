@@ -19,6 +19,7 @@ import {
   reverseGeocode,
   type GeocodeResult,
 } from "@/lib/map-utils";
+import { getUserId } from "@/lib/user-id";
 
 const formSchema = insertAttractionPointSchema.extend({
   type: z.enum(["home", "work", "study", "fitness", "hobby", "family", "shopping", "other"]),
@@ -59,7 +60,7 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      userId: "default-user",
+      userId: getUserId(),
       type: "home",
       name: "",
       address: "",

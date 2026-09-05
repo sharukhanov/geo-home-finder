@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { PlusCircle, Zap, BarChart3, RotateCcw } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { getUserId } from "@/lib/user-id";
 import { useToast } from "@/hooks/use-toast";
 import type { AttractionPoint } from "@shared/schema";
 
@@ -37,7 +38,7 @@ export function ControlPanel({
 
   const resetMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/reset", { userId: "default-user" });
+      await apiRequest("POST", "/api/reset", { userId: getUserId() });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/attraction-points"] });
