@@ -25,7 +25,7 @@ interface ControlPanelProps {
 
 const transportOptions: { value: Transport; label: string }[] = [
   { value: "public_transport", label: "🚇 Общественный транспорт" },
-  { value: "car", label: "🚗 Автомобиль" },
+  { value: "driving", label: "🚗 Автомобиль" },
   { value: "walking", label: "🚶 Пешком" },
 ];
 
