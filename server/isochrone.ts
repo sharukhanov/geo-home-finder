@@ -37,6 +37,21 @@ function toMultiPolygon(geom: Geometry | null): MultiPolygon | null {
   return null;
 }
 
+// Build an RFC 3339 UTC timestamp for the next weekday at the given Moscow
+// hour. Passing this to 2GIS makes it use typical (statistical) rush-hour
+// traffic for that time instead of whatever traffic happens right now.
+function nextWeekdayStartTime(hourMsk: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + 1); // start from tomorrow
+  // Skip weekends (Sat=6, Sun=0) — rush hour is a weekday concept.
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) {
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  // Moscow is UTC+3, so hour in UTC = hourMsk - 3.
+  d.setUTCHours(hourMsk - 3, 0, 0, 0);
+  return d.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
 // Fetch a single point's reachability area from 2GIS. Returns null on any
 // failure so the caller can fall back to the approximate algorithm.
 async function fetchIsochrone(
@@ -44,6 +59,7 @@ async function fetchIsochrone(
   lon: number,
   durationSec: number,
   transport: Transport,
+  arrivalHour: number,
 ): Promise<MultiPolygon | null> {
   const key = process.env.DGIS_API_KEY;
   if (!key) return null;
@@ -57,6 +73,7 @@ async function fetchIsochrone(
         durations: [durationSec],
         transport,
         reverse: false,
+        start_time: nextWeekdayStartTime(arrivalHour),
       }),
     });
 
@@ -85,7 +102,7 @@ async function fetchIsochrone(
 // Compute isochrones for all points and their intersection. Returns null if
 // any point's isochrone could not be fetched (so we fall back cleanly).
 export async function computeOptimalArea(
-  points: Array<{ id: number; name: string; latitude: number; longitude: number; travelTimeMinutes: number }>,
+  points: Array<{ id: number; name: string; latitude: number; longitude: number; travelTimeMinutes: number; arrivalHour: number }>,
   transport: Transport,
 ): Promise<OptimalAreaResult | null> {
   const isochrones: Isochrone[] = [];
@@ -96,6 +113,7 @@ export async function computeOptimalArea(
       point.longitude,
       point.travelTimeMinutes * 60,
       transport,
+      point.arrivalHour,
     );
     if (!geometry) return null; // a failure — let the caller fall back
     isochrones.push({ pointId: point.id, name: point.name, geometry });
