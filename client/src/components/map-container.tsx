@@ -90,18 +90,41 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
         'other': '📍'
       };
 
+      const typeNames: Record<string, string> = {
+        'home': 'Дом',
+        'work': 'Работа',
+        'study': 'Учёба',
+        'fitness': 'Фитнес',
+        'hobby': 'Хобби',
+        'family': 'Семья',
+        'shopping': 'Покупки',
+        'other': 'Другое'
+      };
+
+      const emoji = typeEmojis[point.type] ?? '📍';
+      const typeName = typeNames[point.type] ?? point.type;
+      const arrival = String(point.arrivalHour).padStart(2, '0');
+
       const marker = L.marker([point.latitude, point.longitude]).addTo(mapRef.current);
-      
+
+      // Hover tooltip with the key parameters, so the user doesn't have to
+      // remember what they set for each point.
+      const tooltipContent = `
+        <div style="font-weight:600">${emoji} ${typeName}</div>
+        <div style="font-size:12px;color:#475569">до ${point.travelTimeMinutes} мин · к ${arrival}:00</div>
+      `;
+      marker.bindTooltip(tooltipContent, { direction: "top", offset: [0, -12] });
+
       const popupContent = `
         <div class="p-2">
-          <div class="font-medium">${typeEmojis[point.type]} ${point.name}</div>
+          <div class="font-medium">${emoji} ${typeName}</div>
           <div class="text-sm text-slate-600 mt-1">${point.address}</div>
           <div class="text-xs text-slate-500 mt-1">
-            Время в пути: ${point.travelTimeMinutes} мин
+            Время в пути: до ${point.travelTimeMinutes} мин · нужно к ${arrival}:00
           </div>
         </div>
       `;
-      
+
       marker.bindPopup(popupContent);
       markersRef.current.push(marker);
     });
@@ -154,11 +177,11 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
       if (!mapRef.current) return;
       const layer = L.geoJSON(iso.geometry, {
         style: {
-          color: "#3B82F6",
-          weight: 1,
-          opacity: 0.5,
+          color: "#2563EB",
+          weight: 2,
+          opacity: 0.9,
           fillColor: "#3B82F6",
-          fillOpacity: 0.05,
+          fillOpacity: 0.18,
         },
       }).addTo(mapRef.current);
       geoLayersRef.current.push(layer);
