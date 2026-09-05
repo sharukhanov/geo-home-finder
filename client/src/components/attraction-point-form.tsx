@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Loader2 } from "lucide-react";
+import { Loader2, SlidersHorizontal } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { insertAttractionPointSchema } from "@shared/schema";
@@ -20,6 +20,7 @@ import {
   type GeocodeResult,
 } from "@/lib/map-utils";
 import { getUserId } from "@/lib/user-id";
+import { POINT_TYPES, getPointType } from "@/lib/point-types";
 
 const formSchema = insertAttractionPointSchema.extend({
   type: z.enum(["work", "study", "fitness", "hobby", "family", "shopping", "other"]),
@@ -34,16 +35,6 @@ interface AttractionPointFormProps {
   onClearSelectedPoint: () => void;
 }
 
-const pointTypeOptions = [
-  { value: "work", label: "🏢 Работа" },
-  { value: "study", label: "🎓 Учеба" },
-  { value: "fitness", label: "💪 Фитнес" },
-  { value: "hobby", label: "🎨 Хобби" },
-  { value: "family", label: "👨‍👩‍👧‍👦 Семья" },
-  { value: "shopping", label: "🛍️ Покупки" },
-  { value: "other", label: "📍 Другое" },
-];
-
 const arrivalHourOptions = [
   { value: 8, label: "08:00 — раннее утро" },
   { value: 9, label: "09:00 — утро (на работу)" },
@@ -54,12 +45,15 @@ const arrivalHourOptions = [
   { value: 21, label: "21:00 — поздний вечер" },
 ];
 
+const DEFAULT_TYPE = "work";
+
 export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: AttractionPointFormProps) {
-  const [travelTime, setTravelTime] = useState([30]);
+  const [travelTime, setTravelTime] = useState([getPointType(DEFAULT_TYPE).defaultMinutes]);
   const [address, setAddress] = useState("");
   const [suggestions, setSuggestions] = useState<GeocodeResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   // True once coordinates have been resolved (via suggestion or map click).
   const [hasCoords, setHasCoords] = useState(false);
   // Skip the debounced search when we set the address programmatically.
@@ -71,15 +65,17 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
     resolver: zodResolver(formSchema),
     defaultValues: {
       userId: getUserId(),
-      type: "work",
+      type: DEFAULT_TYPE,
       name: "",
       address: "",
       latitude: 55.7558,
       longitude: 37.6176,
-      travelTimeMinutes: 30,
-      arrivalHour: 9,
+      travelTimeMinutes: getPointType(DEFAULT_TYPE).defaultMinutes,
+      arrivalHour: getPointType(DEFAULT_TYPE).defaultArrivalHour,
     },
   });
+
+  const arrivalHour = form.watch("arrivalHour");
 
   const createPointMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -93,11 +89,12 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
       setSuggestions([]);
       setShowSuggestions(false);
       setHasCoords(false);
-      setTravelTime([30]);
+      setShowAdvanced(false);
+      setTravelTime([getPointType(DEFAULT_TYPE).defaultMinutes]);
       onClearSelectedPoint();
       toast({
         title: "Точка добавлена",
-        description: "Точка притяжения успешно добавлена на карту",
+        description: "Место добавлено на карту",
       });
     },
     onError: () => {
@@ -166,6 +163,14 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
     form.setValue("travelTimeMinutes", travelTime[0]);
   }, [travelTime]);
 
+  // When the type changes, apply that type's smart defaults for time and hour.
+  const handleTypeChange = (value: string) => {
+    form.setValue("type", value as FormData["type"]);
+    const info = getPointType(value);
+    setTravelTime([info.defaultMinutes]);
+    form.setValue("arrivalHour", info.defaultArrivalHour);
+  };
+
   const handleAddressChange = (value: string) => {
     setAddress(value);
     form.setValue("address", value);
@@ -208,10 +213,10 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
       data.longitude = coords.lng;
     }
 
-    // Set name based on type if not provided
+    // Name is derived from the type.
     if (!data.name.trim()) {
-      const typeOption = pointTypeOptions.find(option => option.value === data.type);
-      data.name = typeOption?.label || data.type;
+      const info = getPointType(data.type);
+      data.name = `${info.emoji} ${info.name}`;
     }
 
     createPointMutation.mutate(data);
@@ -225,17 +230,17 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
           name="type"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Тип места</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <FormLabel>Что это за место</FormLabel>
+              <Select onValueChange={handleTypeChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Выберите тип места" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {pointTypeOptions.map((option) => (
+                  {POINT_TYPES.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
-                      {option.label}
+                      {option.emoji} {option.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -281,65 +286,78 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
           )}
         </FormItem>
 
-        <div className="space-y-3">
-          <Label>Максимальное время в пути: {travelTime[0]} мин</Label>
-          <div className="text-xs text-slate-600 mb-2 p-2 bg-slate-50 rounded">
-            На общественном транспорте + пешком до точки
-          </div>
-          <Slider
-            value={travelTime}
-            onValueChange={setTravelTime}
-            max={60}
-            min={10}
-            step={10}
-            className="w-full"
-          />
-          <div className="flex justify-between text-xs text-slate-500">
-            <span>10 мин</span>
-            <span>60 мин</span>
-          </div>
-          <div className="text-xs text-slate-600">
-            <strong>Зоны:</strong> Идеально {Math.round(travelTime[0] * 0.7)} мин • Хорошо {travelTime[0]} мин • Далеко {Math.round(travelTime[0] * 1.3)} мин
-          </div>
-        </div>
+        {/* Smart defaults are applied from the type; fine-tuning is optional. */}
+        <div className="rounded-md bg-slate-50 p-3">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="flex items-center justify-between w-full text-sm text-slate-700"
+          >
+            <span className="flex items-center gap-2">
+              <SlidersHorizontal className="w-4 h-4 text-slate-500" />
+              Время в пути: до {travelTime[0]} мин · к {String(arrivalHour).padStart(2, "0")}:00
+            </span>
+            <span className="text-xs text-blue-600">{showAdvanced ? "скрыть" : "изменить"}</span>
+          </button>
 
-        <FormField
-          control={form.control}
-          name="arrivalHour"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Во сколько нужно быть на месте</FormLabel>
-              <Select
-                onValueChange={(v) => field.onChange(parseInt(v, 10))}
-                value={String(field.value)}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {arrivalHourOptions.map((option) => (
-                    <SelectItem key={option.value} value={String(option.value)}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-slate-500">
-                Учитываем типичные пробки на это время (в будни)
-              </p>
-              <FormMessage />
-            </FormItem>
+          {showAdvanced && (
+            <div className="mt-4 space-y-4">
+              <div className="space-y-2">
+                <Label>Максимальное время в пути: {travelTime[0]} мин</Label>
+                <Slider
+                  value={travelTime}
+                  onValueChange={setTravelTime}
+                  max={60}
+                  min={10}
+                  step={5}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span>10 мин</span>
+                  <span>60 мин</span>
+                </div>
+              </div>
+
+              <FormField
+                control={form.control}
+                name="arrivalHour"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Во сколько нужно быть на месте</FormLabel>
+                    <Select
+                      onValueChange={(v) => field.onChange(parseInt(v, 10))}
+                      value={String(field.value)}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {arrivalHourOptions.map((option) => (
+                          <SelectItem key={option.value} value={String(option.value)}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-slate-500">
+                      Учитываем типичные пробки на это время (в будни)
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
           )}
-        />
+        </div>
 
         <Button
           type="submit"
           className="w-full"
           disabled={createPointMutation.isPending}
         >
-          {createPointMutation.isPending ? "Добавляем..." : "Добавить точку"}
+          {createPointMutation.isPending ? "Добавляем..." : "Добавить место"}
         </Button>
       </form>
     </Form>

@@ -1,11 +1,11 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { MultiPolygon } from "geojson";
 import { MapContainer } from "@/components/map-container";
 import { ControlPanel } from "@/components/control-panel";
 import { ZoneLegend } from "@/components/zone-legend";
 import { Button } from "@/components/ui/button";
-import { MapPin, Menu } from "lucide-react";
+import { MapPin, Menu, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserId } from "@/lib/user-id";
@@ -17,6 +17,7 @@ export default function Home() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [selectedPoint, setSelectedPoint] = useState<{lat: number, lng: number} | null>(null);
+  const [transport, setTransport] = useState<Transport>("public_transport");
   // Isochrone-mode results (real travel-time zones). Empty in circle mode.
   const [isochrones, setIsochrones] = useState<IsochroneFeature[]>([]);
   const [optimalArea, setOptimalArea] = useState<MultiPolygon | null>(null);
@@ -50,11 +51,11 @@ export default function Home() {
   }, []);
 
   const calculateZonesMutation = useMutation({
-    mutationFn: async (transport: Transport) => {
+    mutationFn: async (mode: Transport) => {
       setIsCalculating(true);
       const response = await apiRequest("POST", "/api/zones/calculate", {
         userId,
-        transport,
+        transport: mode,
       });
       return response.json() as Promise<CalculateResponse>;
     },
@@ -65,56 +66,47 @@ export default function Home() {
         setUseIsochrones(true);
         setIsochrones(data.isochrones);
         setOptimalArea(data.optimalArea);
-        if (!data.optimalArea) {
+        if (!data.optimalArea && data.isochrones.length > 1) {
           toast({
             title: "Общая зона не найдена",
             description: "До всех точек не успеть за заданное время. Увеличьте время в пути или выберите более близкие места.",
             variant: "destructive",
           });
-        } else {
-          toast({
-            title: "Готово!",
-            description: "Зелёным показана область, откуда удобно добираться до всех точек.",
-          });
         }
       } else {
-        // Circle fallback mode
         setUseIsochrones(false);
         setIsochrones([]);
         setOptimalArea(null);
         queryClient.invalidateQueries({ queryKey: ["/api/zones"] });
-        const count = data.zones?.length ?? 0;
-        if (count === 0) {
-          toast({
-            title: "Не удалось найти оптимальные зоны",
-            description: "Точки слишком далеко друг от друга. Попробуйте уменьшить время в пути или выберите более близкие локации.",
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Зоны рассчитаны успешно!",
-            description: `Найдено ${count} оптимальных зон для проживания.`,
-          });
-        }
       }
     },
     onError: () => {
       setIsCalculating(false);
       toast({
-        title: "Ошибка расчета",
-        description: "Произошла ошибка при расчете зон. Попробуйте еще раз.",
+        title: "Ошибка расчёта",
+        description: "Произошла ошибка при расчёте зон. Попробуйте ещё раз.",
         variant: "destructive",
       });
     },
   });
 
+  // Auto-calculate whenever the points or transport mode change (debounced).
+  const mutateRef = useRef(calculateZonesMutation.mutate);
+  mutateRef.current = calculateZonesMutation.mutate;
+  useEffect(() => {
+    if (attractionPoints.length === 0) {
+      clearResults();
+      return;
+    }
+    const timer = setTimeout(() => mutateRef.current(transport), 500);
+    return () => clearTimeout(timer);
+  }, [attractionPoints, transport, clearResults]);
+
   const handleMapClick = useCallback((lat: number, lng: number) => {
     setSelectedPoint({ lat, lng });
   }, []);
 
-  const togglePanel = () => {
-    setIsPanelOpen(!isPanelOpen);
-  };
+  const togglePanel = () => setIsPanelOpen(!isPanelOpen);
 
   const hasResults = useIsochrones ? isochrones.length > 0 : zones.length > 0;
 
@@ -161,10 +153,11 @@ export default function Home() {
         <ControlPanel
           attractionPoints={attractionPoints}
           selectedPoint={selectedPoint}
-          onCalculateZones={(transport) => calculateZonesMutation.mutate(transport)}
-          isCalculating={isCalculating}
+          transport={transport}
+          onTransportChange={setTransport}
           onClearSelectedPoint={() => setSelectedPoint(null)}
           onReset={clearResults}
+          showResultSummary={hasResults && useIsochrones}
         />
       </div>
 
@@ -179,13 +172,11 @@ export default function Home() {
       {/* Zone Legend */}
       {hasResults && <ZoneLegend isochroneMode={useIsochrones} />}
 
-      {/* Loading Overlay */}
+      {/* Small non-blocking calculating indicator */}
       {isCalculating && (
-        <div className="absolute inset-0 bg-white bg-opacity-90 z-50 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
-            <p className="text-slate-600 font-medium">Анализируем оптимальные зоны...</p>
-          </div>
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 bg-white/95 shadow-md rounded-full px-4 py-2 text-sm text-slate-700">
+          <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+          Обновляем зоны…
         </div>
       )}
     </div>
