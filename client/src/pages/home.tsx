@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { MapPin, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
+import { getUserId } from "@/lib/user-id";
 import { useToast } from "@/hooks/use-toast";
 import type { AttractionPoint, Zone } from "@shared/schema";
 
@@ -16,11 +17,12 @@ export default function Home() {
   const [selectedPoint, setSelectedPoint] = useState<{lat: number, lng: number} | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const userId = getUserId();
 
   const { data: attractionPoints = [], isLoading: isLoadingPoints } = useQuery<AttractionPoint[]>({
     queryKey: ["/api/attraction-points"],
     queryFn: async () => {
-      const response = await fetch("/api/attraction-points?userId=default-user");
+      const response = await fetch(`/api/attraction-points?userId=${userId}`);
       if (!response.ok) throw new Error("Failed to fetch attraction points");
       return response.json();
     },
@@ -29,7 +31,7 @@ export default function Home() {
   const { data: zones = [], isLoading: isLoadingZones } = useQuery<Zone[]>({
     queryKey: ["/api/zones"],
     queryFn: async () => {
-      const response = await fetch("/api/zones?userId=default-user");
+      const response = await fetch(`/api/zones?userId=${userId}`);
       if (!response.ok) throw new Error("Failed to fetch zones");
       return response.json();
     },
@@ -39,7 +41,7 @@ export default function Home() {
     mutationFn: async () => {
       setIsCalculating(true);
       const response = await apiRequest("POST", "/api/zones/calculate", {
-        userId: "default-user"
+        userId
       });
       return response.json();
     },
