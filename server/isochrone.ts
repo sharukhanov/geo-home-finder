@@ -11,7 +11,7 @@ import { parse as parseWkt } from "wellknown";
 import polygonClipping from "polygon-clipping";
 import type { MultiPolygon, Polygon, Geometry } from "geojson";
 
-export type Transport = "public_transport" | "car" | "walking";
+export type Transport = "public_transport" | "driving" | "walking";
 
 const ISOCHRONE_URL = "https://routing.api.2gis.com/isochrone/2.0.0";
 

@@ -1,6 +1,6 @@
 import type { MultiPolygon } from "geojson";
 
-export type Transport = "public_transport" | "car" | "walking";
+export type Transport = "public_transport" | "driving" | "walking";
 
 export interface IsochroneFeature {
   pointId: number;
