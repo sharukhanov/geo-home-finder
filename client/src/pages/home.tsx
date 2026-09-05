@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { MultiPolygon } from "geojson";
 import { MapContainer } from "@/components/map-container";
 import { ControlPanel } from "@/components/control-panel";
 import { ZoneLegend } from "@/components/zone-legend";
@@ -8,6 +9,7 @@ import { MapPin, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserId } from "@/lib/user-id";
+import type { Transport, IsochroneFeature, CalculateResponse } from "@/lib/geo-types";
 import { useToast } from "@/hooks/use-toast";
 import type { AttractionPoint, Zone } from "@shared/schema";
 
@@ -15,11 +17,15 @@ export default function Home() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [selectedPoint, setSelectedPoint] = useState<{lat: number, lng: number} | null>(null);
+  // Isochrone-mode results (real travel-time zones). Empty in circle mode.
+  const [isochrones, setIsochrones] = useState<IsochroneFeature[]>([]);
+  const [optimalArea, setOptimalArea] = useState<MultiPolygon | null>(null);
+  const [useIsochrones, setUseIsochrones] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const userId = getUserId();
 
-  const { data: attractionPoints = [], isLoading: isLoadingPoints } = useQuery<AttractionPoint[]>({
+  const { data: attractionPoints = [] } = useQuery<AttractionPoint[]>({
     queryKey: ["/api/attraction-points"],
     queryFn: async () => {
       const response = await fetch(`/api/attraction-points?userId=${userId}`);
@@ -28,7 +34,7 @@ export default function Home() {
     },
   });
 
-  const { data: zones = [], isLoading: isLoadingZones } = useQuery<Zone[]>({
+  const { data: zones = [] } = useQuery<Zone[]>({
     queryKey: ["/api/zones"],
     queryFn: async () => {
       const response = await fetch(`/api/zones?userId=${userId}`);
@@ -37,30 +43,59 @@ export default function Home() {
     },
   });
 
+  const clearResults = useCallback(() => {
+    setIsochrones([]);
+    setOptimalArea(null);
+    setUseIsochrones(false);
+  }, []);
+
   const calculateZonesMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (transport: Transport) => {
       setIsCalculating(true);
       const response = await apiRequest("POST", "/api/zones/calculate", {
-        userId
+        userId,
+        transport,
       });
-      return response.json();
+      return response.json() as Promise<CalculateResponse>;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/zones"] });
       setIsCalculating(false);
-      
-      // Check if no zones were found
-      if (!data || data.length === 0) {
-        toast({
-          title: "Не удалось найти оптимальные зоны",
-          description: "Точки слишком далеко друг от друга. Попробуйте уменьшить время в пути или выберите более близкие локации.",
-          variant: "destructive",
-        });
+
+      if (data.mode === "isochrone") {
+        setUseIsochrones(true);
+        setIsochrones(data.isochrones);
+        setOptimalArea(data.optimalArea);
+        if (!data.optimalArea) {
+          toast({
+            title: "Общая зона не найдена",
+            description: "До всех точек не успеть за заданное время. Увеличьте время в пути или выберите более близкие места.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Готово!",
+            description: "Зелёным показана область, откуда удобно добираться до всех точек.",
+          });
+        }
       } else {
-        toast({
-          title: "Зоны рассчитаны успешно!",
-          description: `Найдено ${data.length} оптимальных зон для проживания.`,
-        });
+        // Circle fallback mode
+        setUseIsochrones(false);
+        setIsochrones([]);
+        setOptimalArea(null);
+        queryClient.invalidateQueries({ queryKey: ["/api/zones"] });
+        const count = data.zones?.length ?? 0;
+        if (count === 0) {
+          toast({
+            title: "Не удалось найти оптимальные зоны",
+            description: "Точки слишком далеко друг от друга. Попробуйте уменьшить время в пути или выберите более близкие локации.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Зоны рассчитаны успешно!",
+            description: `Найдено ${count} оптимальных зон для проживания.`,
+          });
+        }
       }
     },
     onError: () => {
@@ -81,7 +116,7 @@ export default function Home() {
     setIsPanelOpen(!isPanelOpen);
   };
 
-  const hasZones = zones.length > 0;
+  const hasResults = useIsochrones ? isochrones.length > 0 : zones.length > 0;
 
   return (
     <div className="relative h-screen w-full overflow-hidden">
@@ -108,7 +143,9 @@ export default function Home() {
       {/* Map Container */}
       <MapContainer
         attractionPoints={attractionPoints}
-        zones={zones}
+        zones={useIsochrones ? [] : zones}
+        isochrones={useIsochrones ? isochrones : []}
+        optimalArea={useIsochrones ? optimalArea : null}
         selectedPoint={selectedPoint}
         onMapClick={handleMapClick}
         className="absolute inset-0 z-0"
@@ -124,9 +161,10 @@ export default function Home() {
         <ControlPanel
           attractionPoints={attractionPoints}
           selectedPoint={selectedPoint}
-          onCalculateZones={() => calculateZonesMutation.mutate()}
+          onCalculateZones={(transport) => calculateZonesMutation.mutate(transport)}
           isCalculating={isCalculating}
           onClearSelectedPoint={() => setSelectedPoint(null)}
+          onReset={clearResults}
         />
       </div>
 
@@ -139,9 +177,7 @@ export default function Home() {
       )}
 
       {/* Zone Legend */}
-      {hasZones && <ZoneLegend />}
-
-
+      {hasResults && <ZoneLegend isochroneMode={useIsochrones} />}
 
       {/* Loading Overlay */}
       {isCalculating && (

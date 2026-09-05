@@ -1,21 +1,26 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
+import type { MultiPolygon } from "geojson";
 import type { AttractionPoint, Zone } from "@shared/schema";
+import type { IsochroneFeature } from "@/lib/geo-types";
 import { cn } from "@/lib/utils";
 
 interface MapContainerProps {
   attractionPoints: AttractionPoint[];
   zones: Zone[];
+  isochrones?: IsochroneFeature[];
+  optimalArea?: MultiPolygon | null;
   onMapClick: (lat: number, lng: number) => void;
   selectedPoint?: {lat: number, lng: number} | null;
   className?: string;
 }
 
-export function MapContainer({ attractionPoints, zones, onMapClick, selectedPoint, className }: MapContainerProps) {
+export function MapContainer({ attractionPoints, zones, isochrones = [], optimalArea = null, onMapClick, selectedPoint, className }: MapContainerProps) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<L.Marker[]>([]);
   const zonesRef = useRef<L.Circle[]>([]);
+  const geoLayersRef = useRef<L.GeoJSON[]>([]);
   const selectedMarkerRef = useRef<L.Marker | null>(null);
 
   // Initialize map
@@ -133,6 +138,56 @@ export function MapContainer({ attractionPoints, zones, onMapClick, selectedPoin
       zonesRef.current.push(circle);
     });
   }, [zones]);
+
+  // Update isochrones (real travel-time areas) and the optimal intersection.
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    // Clear existing geo layers
+    geoLayersRef.current.forEach((layer) => {
+      mapRef.current?.removeLayer(layer);
+    });
+    geoLayersRef.current = [];
+
+    // Draw each point's reachability area as a thin outline
+    isochrones.forEach((iso) => {
+      if (!mapRef.current) return;
+      const layer = L.geoJSON(iso.geometry, {
+        style: {
+          color: "#3B82F6",
+          weight: 1,
+          opacity: 0.5,
+          fillColor: "#3B82F6",
+          fillOpacity: 0.05,
+        },
+      }).addTo(mapRef.current);
+      geoLayersRef.current.push(layer);
+    });
+
+    // Draw the optimal area (intersection of all isochrones) filled in green
+    if (optimalArea) {
+      const layer = L.geoJSON(optimalArea, {
+        style: {
+          color: "#10B981",
+          weight: 2,
+          opacity: 0.9,
+          fillColor: "#10B981",
+          fillOpacity: 0.35,
+        },
+      }).addTo(mapRef.current);
+      layer.bindPopup(
+        '<div class="p-1 font-medium text-emerald-700">✓ Оптимальная зона для жилья</div>',
+      );
+      geoLayersRef.current.push(layer);
+
+      // Zoom the map to fit the optimal area
+      try {
+        mapRef.current.fitBounds(layer.getBounds(), { padding: [40, 40] });
+      } catch {
+        // ignore if bounds are invalid
+      }
+    }
+  }, [isochrones, optimalArea]);
 
   // Update selected point marker and zoom
   useEffect(() => {

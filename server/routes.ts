@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertAttractionPointSchema, insertZoneSchema } from "@shared/schema";
 import { searchAddress, reverseGeocode } from "./geocode";
+import { computeOptimalArea, type Transport } from "./isochrone";
 import { z } from "zod";
 
 // Helper function to calculate distance between two points (Haversine formula)
@@ -253,27 +254,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Calculate and create zones
+  // Calculate optimal living zones.
+  //
+  // Preferred: real travel-time isochrones from 2GIS (public transport / car /
+  // walking), intersected to find where all points are reachable in time.
+  // Fallback: the approximate straight-line grid algorithm (also used when no
+  // 2GIS key is configured or the service is unavailable).
   app.post("/api/zones/calculate", async (req, res) => {
     try {
       const userId = req.body.userId || "default-user";
-      
-      // Clear existing zones for user
-      await storage.deleteZonesForUser(userId);
-      
-      // Get attraction points for user
+      const transport = (req.body.transport as Transport) || "public_transport";
+
       const points = await storage.getAttractionPoints(userId);
-      
       if (points.length === 0) {
         return res.status(400).json({ message: "No attraction points found" });
       }
 
-      const newZones = [];
+      // Try the real isochrone approach first.
+      if (process.env.DGIS_API_KEY) {
+        try {
+          const result = await computeOptimalArea(points, transport);
+          if (result) {
+            return res.json({
+              mode: "isochrone",
+              transport,
+              isochrones: result.isochrones,
+              optimalArea: result.optimalArea,
+            });
+          }
+          console.warn("Isochrone computation unavailable; falling back to approximate mode");
+        } catch (err) {
+          console.error("Isochrone error; falling back to approximate mode:", err);
+        }
+      }
 
-      // Calculate optimal zones between all points using grid analysis
+      // Fallback: approximate circle-based zones (persisted so they survive reload).
+      await storage.deleteZonesForUser(userId);
       const optimalAreas = calculateOptimalLivingAreas(points);
-
-      // Create zones for the best areas found
+      const newZones = [];
       for (const area of optimalAreas) {
         const zone = await storage.createZone({
           userId,
@@ -281,12 +299,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           centerLongitude: area.lng,
           radiusMeters: area.radius,
           zoneType: area.type,
-          pointId: null, // No single point association since it's between multiple points
+          pointId: null,
         });
         newZones.push(zone);
       }
 
-      res.json(newZones);
+      res.json({ mode: "circle", zones: newZones });
     } catch (error) {
       res.status(500).json({ message: "Failed to calculate zones" });
     }
