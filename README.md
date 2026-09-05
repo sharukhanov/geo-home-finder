@@ -63,6 +63,28 @@ server/   — Express API + геокодинг + расчёт зон
 shared/   — общая схема данных (Drizzle + Zod)
 ```
 
+## Деплой на Railway
+
+Проект готов к деплою на [Railway](https://railway.app) как единый сервис
+(Express отдаёт и API, и собранный фронтенд).
+
+1. Зайти на railway.app → **New Project** → **Deploy from GitHub repo** →
+   выбрать `sharukhanov/geo-home-finder`.
+2. Railway автоматически определит Node-проект. Параметры сборки/запуска уже
+   заданы в `railway.json`:
+   - build: `npm run build`
+   - start: `npm run start`
+3. В настройках сервиса → **Variables** задать переменные окружения
+   (см. `.env.example`). Как минимум:
+   - `GEOCODER_USER_AGENT` — с вашим реальным контактом (требование Nominatim).
+   - `PORT` задавать **не нужно** — Railway подставит его сам, сервер его читает.
+4. Нажать **Deploy**. После сборки Railway выдаст публичный URL
+   (**Settings → Networking → Generate Domain**).
+
+> Для продакшена рекомендуется вынести геокодинг на self-hosted Nominatim или
+> платного провайдера (`GEOCODER_BASE_URL`), т.к. у публичного Nominatim строгие
+> лимиты (1 запрос/сек). База данных пока не требуется — хранилище in-memory.
+
 ## Дальнейшие шаги
 
 - Реальная маршрутизация/изохроны (OpenRouteService / Valhalla / OSRM) вместо
