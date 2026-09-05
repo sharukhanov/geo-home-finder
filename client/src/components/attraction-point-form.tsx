@@ -22,7 +22,7 @@ import {
 import { getUserId } from "@/lib/user-id";
 
 const formSchema = insertAttractionPointSchema.extend({
-  type: z.enum(["home", "work", "study", "fitness", "hobby", "family", "shopping", "other"]),
+  type: z.enum(["work", "study", "fitness", "hobby", "family", "shopping", "other"]),
   travelTimeMinutes: z.number().min(10).max(60),
   arrivalHour: z.number().min(0).max(23),
 });
@@ -35,7 +35,6 @@ interface AttractionPointFormProps {
 }
 
 const pointTypeOptions = [
-  { value: "home", label: "🏠 Дом" },
   { value: "work", label: "🏢 Работа" },
   { value: "study", label: "🎓 Учеба" },
   { value: "fitness", label: "💪 Фитнес" },
@@ -72,7 +71,7 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
     resolver: zodResolver(formSchema),
     defaultValues: {
       userId: getUserId(),
-      type: "home",
+      type: "work",
       name: "",
       address: "",
       latitude: 55.7558,
@@ -241,20 +240,6 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
                   ))}
                 </SelectContent>
               </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Название (необязательно)</FormLabel>
-              <FormControl>
-                <Input placeholder="Например: Офис, Спортзал..." {...field} />
-              </FormControl>
               <FormMessage />
             </FormItem>
           )}
