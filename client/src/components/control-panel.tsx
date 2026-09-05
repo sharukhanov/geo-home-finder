@@ -4,36 +4,46 @@ import { AttractionPointForm } from "./attraction-point-form";
 import { PointsList } from "./points-list";
 import { TransportInfo } from "./transport-info";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { PlusCircle, Zap, BarChart3, RotateCcw } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserId } from "@/lib/user-id";
+import type { Transport } from "@/lib/geo-types";
 import { useToast } from "@/hooks/use-toast";
 import type { AttractionPoint } from "@shared/schema";
 
 interface ControlPanelProps {
   attractionPoints: AttractionPoint[];
   selectedPoint: {lat: number, lng: number} | null;
-  onCalculateZones: () => void;
+  onCalculateZones: (transport: Transport) => void;
   isCalculating: boolean;
   onClearSelectedPoint: () => void;
+  onReset: () => void;
 }
+
+const transportOptions: { value: Transport; label: string }[] = [
+  { value: "public_transport", label: "🚇 Общественный транспорт" },
+  { value: "car", label: "🚗 Автомобиль" },
+  { value: "walking", label: "🚶 Пешком" },
+];
 
 export function ControlPanel({
   attractionPoints,
   selectedPoint,
   onCalculateZones,
   isCalculating,
-  onClearSelectedPoint
+  onClearSelectedPoint,
+  onReset
 }: ControlPanelProps) {
-  const [showAnalysis, setShowAnalysis] = useState(false);
   const hasPoints = attractionPoints.length > 0;
+  const [transport, setTransport] = useState<Transport>("public_transport");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const handleCalculate = () => {
-    onCalculateZones();
-    setShowAnalysis(true);
+    onCalculateZones(transport);
   };
 
   const resetMutation = useMutation({
@@ -43,8 +53,8 @@ export function ControlPanel({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/attraction-points"] });
       queryClient.invalidateQueries({ queryKey: ["/api/zones"] });
-      setShowAnalysis(false);
       onClearSelectedPoint();
+      onReset();
       toast({
         title: "Всё сброшено",
         description: "Точки и зоны удалены. Можно начать заново.",
@@ -73,7 +83,7 @@ export function ControlPanel({
           Найти оптимальное жилье
         </h2>
         <p className="text-sm text-slate-600">
-          Добавьте важные для вас места и настройте приоритеты
+          Добавьте важные для вас места и способ передвижения
         </p>
       </div>
 
@@ -108,37 +118,25 @@ export function ControlPanel({
             </div>
           </>
         )}
-
-        {/* Analysis Section */}
-        {showAnalysis && hasPoints && (
-          <>
-            <Separator />
-            <div className="space-y-4">
-              <h3 className="font-medium text-slate-900 flex items-center">
-                <Zap className="w-5 h-5 mr-2 text-purple-600" />
-                Результаты анализа
-              </h3>
-              <div className="bg-slate-50 rounded-lg p-4 space-y-3">
-                <div className="flex items-center space-x-3">
-                  <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
-                  <span className="text-sm text-slate-700">Идеальные зоны</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-4 h-4 bg-emerald-500 rounded-full"></div>
-                  <span className="text-sm text-slate-700">Подходящие зоны</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-4 h-4 bg-red-500 rounded-full"></div>
-                  <span className="text-sm text-slate-700">Неподходящие зоны</span>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
       </div>
 
       {/* Action Buttons */}
       <div className="p-6 border-t border-slate-100 space-y-3">
+        <div className="space-y-1.5">
+          <Label>Как добираетесь</Label>
+          <Select value={transport} onValueChange={(v) => setTransport(v as Transport)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {transportOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <Button
           onClick={handleCalculate}
           disabled={!hasPoints || isCalculating}
