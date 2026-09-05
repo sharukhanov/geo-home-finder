@@ -31,8 +31,12 @@ export async function ensureSchema(): Promise<void> {
       latitude REAL NOT NULL,
       longitude REAL NOT NULL,
       travel_time_minutes INTEGER NOT NULL,
+      arrival_hour INTEGER NOT NULL DEFAULT 9,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
+
+    -- Add the column for databases created before arrival_hour existed.
+    ALTER TABLE attraction_points ADD COLUMN IF NOT EXISTS arrival_hour INTEGER NOT NULL DEFAULT 9;
 
     CREATE TABLE IF NOT EXISTS zones (
       id SERIAL PRIMARY KEY,

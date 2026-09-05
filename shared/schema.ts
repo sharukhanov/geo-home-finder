@@ -11,6 +11,9 @@ export const attractionPoints = pgTable("attraction_points", {
   latitude: real("latitude").notNull(),
   longitude: real("longitude").notNull(),
   travelTimeMinutes: integer("travel_time_minutes").notNull(),
+  // Hour of day (0-23, Moscow time) when the user needs to reach this point.
+  // Used to account for typical rush-hour traffic. Defaults to 9 (morning).
+  arrivalHour: integer("arrival_hour").notNull().default(9),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

@@ -44,6 +44,7 @@ export class MemStorage implements IStorage {
     const point: AttractionPoint = {
       ...insertPoint,
       id,
+      arrivalHour: insertPoint.arrivalHour ?? 9,
       createdAt: new Date(),
     };
     this.attractionPoints.set(id, point);

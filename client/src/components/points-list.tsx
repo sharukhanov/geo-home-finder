@@ -93,6 +93,9 @@ export function PointsList({ points }: PointsListProps) {
                     <Clock className="w-3 h-3 mr-1" />
                     {point.travelTimeMinutes} мин
                   </Badge>
+                  <Badge variant="secondary" className="text-xs">
+                    к {String(point.arrivalHour).padStart(2, "0")}:00
+                  </Badge>
                 </div>
               </div>
               

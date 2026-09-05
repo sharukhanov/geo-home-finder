@@ -24,6 +24,7 @@ import { getUserId } from "@/lib/user-id";
 const formSchema = insertAttractionPointSchema.extend({
   type: z.enum(["home", "work", "study", "fitness", "hobby", "family", "shopping", "other"]),
   travelTimeMinutes: z.number().min(10).max(60),
+  arrivalHour: z.number().min(0).max(23),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -42,6 +43,16 @@ const pointTypeOptions = [
   { value: "family", label: "👨‍👩‍👧‍👦 Семья" },
   { value: "shopping", label: "🛍️ Покупки" },
   { value: "other", label: "📍 Другое" },
+];
+
+const arrivalHourOptions = [
+  { value: 8, label: "08:00 — раннее утро" },
+  { value: 9, label: "09:00 — утро (на работу)" },
+  { value: 10, label: "10:00 — позднее утро" },
+  { value: 13, label: "13:00 — день" },
+  { value: 18, label: "18:00 — вечер (после работы)" },
+  { value: 19, label: "19:00 — вечер" },
+  { value: 21, label: "21:00 — поздний вечер" },
 ];
 
 export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: AttractionPointFormProps) {
@@ -67,6 +78,7 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
       latitude: 55.7558,
       longitude: 37.6176,
       travelTimeMinutes: 30,
+      arrivalHour: 9,
     },
   });
 
@@ -305,6 +317,37 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
             <strong>Зоны:</strong> Идеально {Math.round(travelTime[0] * 0.7)} мин • Хорошо {travelTime[0]} мин • Далеко {Math.round(travelTime[0] * 1.3)} мин
           </div>
         </div>
+
+        <FormField
+          control={form.control}
+          name="arrivalHour"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Во сколько нужно быть на месте</FormLabel>
+              <Select
+                onValueChange={(v) => field.onChange(parseInt(v, 10))}
+                value={String(field.value)}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {arrivalHourOptions.map((option) => (
+                    <SelectItem key={option.value} value={String(option.value)}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500">
+                Учитываем типичные пробки на это время (в будни)
+              </p>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <Button
           type="submit"
