@@ -1,4 +1,6 @@
+import { eq } from "drizzle-orm";
 import { attractionPoints, zones, type AttractionPoint, type InsertAttractionPoint, type Zone, type InsertZone } from "@shared/schema";
+import { db } from "./db";
 
 export interface IStorage {
   // Attraction Points
@@ -89,4 +91,59 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// PostgreSQL-backed storage (Drizzle ORM). Used when DATABASE_URL is set.
+export class DbStorage implements IStorage {
+  async getAttractionPoints(userId: string): Promise<AttractionPoint[]> {
+    return db
+      .select()
+      .from(attractionPoints)
+      .where(eq(attractionPoints.userId, userId));
+  }
+
+  async getAttractionPoint(id: number): Promise<AttractionPoint | undefined> {
+    const rows = await db
+      .select()
+      .from(attractionPoints)
+      .where(eq(attractionPoints.id, id));
+    return rows[0];
+  }
+
+  async createAttractionPoint(insertPoint: InsertAttractionPoint): Promise<AttractionPoint> {
+    const rows = await db.insert(attractionPoints).values(insertPoint).returning();
+    return rows[0];
+  }
+
+  async deleteAttractionPoint(id: number): Promise<boolean> {
+    const rows = await db
+      .delete(attractionPoints)
+      .where(eq(attractionPoints.id, id))
+      .returning({ id: attractionPoints.id });
+    return rows.length > 0;
+  }
+
+  async deleteAttractionPointsForUser(userId: string): Promise<void> {
+    await db.delete(attractionPoints).where(eq(attractionPoints.userId, userId));
+  }
+
+  async getZones(userId: string): Promise<Zone[]> {
+    return db.select().from(zones).where(eq(zones.userId, userId));
+  }
+
+  async createZone(insertZone: InsertZone): Promise<Zone> {
+    const rows = await db
+      .insert(zones)
+      .values({ ...insertZone, pointId: insertZone.pointId ?? null })
+      .returning();
+    return rows[0];
+  }
+
+  async deleteZonesForUser(userId: string): Promise<void> {
+    await db.delete(zones).where(eq(zones.userId, userId));
+  }
+}
+
+// Use Postgres when a database is configured, otherwise fall back to in-memory
+// storage (handy for local development without a database).
+export const storage: IStorage = process.env.DATABASE_URL
+  ? new DbStorage()
+  : new MemStorage();
