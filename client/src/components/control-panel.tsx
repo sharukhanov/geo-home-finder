@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AttractionPointForm } from "./attraction-point-form";
 import { PointsList } from "./points-list";
 import { TransportInfo } from "./transport-info";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { PlusCircle, Zap, BarChart3 } from "lucide-react";
+import { PlusCircle, Zap, BarChart3, RotateCcw } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { AttractionPoint } from "@shared/schema";
 
 interface ControlPanelProps {
@@ -15,19 +18,50 @@ interface ControlPanelProps {
   onClearSelectedPoint: () => void;
 }
 
-export function ControlPanel({ 
-  attractionPoints, 
-  selectedPoint, 
-  onCalculateZones, 
+export function ControlPanel({
+  attractionPoints,
+  selectedPoint,
+  onCalculateZones,
   isCalculating,
-  onClearSelectedPoint 
+  onClearSelectedPoint
 }: ControlPanelProps) {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const hasPoints = attractionPoints.length > 0;
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const handleCalculate = () => {
     onCalculateZones();
     setShowAnalysis(true);
+  };
+
+  const resetMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/reset", { userId: "default-user" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/attraction-points"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/zones"] });
+      setShowAnalysis(false);
+      onClearSelectedPoint();
+      toast({
+        title: "Всё сброшено",
+        description: "Точки и зоны удалены. Можно начать заново.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось сбросить данные. Попробуйте ещё раз.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleReset = () => {
+    if (window.confirm("Удалить все точки и рассчитанные зоны?")) {
+      resetMutation.mutate();
+    }
   };
 
   return (
@@ -53,8 +87,8 @@ export function ControlPanel({
             <PlusCircle className="w-5 h-5 mr-2 text-blue-600" />
             Добавить точку притяжения
           </h3>
-          
-          <AttractionPointForm 
+
+          <AttractionPointForm
             selectedPoint={selectedPoint}
             onClearSelectedPoint={onClearSelectedPoint}
           />
@@ -102,8 +136,8 @@ export function ControlPanel({
         )}
       </div>
 
-      {/* Calculate Button */}
-      <div className="p-6 border-t border-slate-100">
+      {/* Action Buttons */}
+      <div className="p-6 border-t border-slate-100 space-y-3">
         <Button
           onClick={handleCalculate}
           disabled={!hasPoints || isCalculating}
@@ -113,6 +147,17 @@ export function ControlPanel({
           <Zap className="w-5 h-5 mr-2" />
           {isCalculating ? "Рассчитываем..." : "Рассчитать оптимальные зоны"}
         </Button>
+        {hasPoints && (
+          <Button
+            onClick={handleReset}
+            disabled={resetMutation.isPending}
+            variant="outline"
+            className="w-full"
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            {resetMutation.isPending ? "Сбрасываем..." : "Сбросить всё"}
+          </Button>
+        )}
       </div>
     </div>
   );

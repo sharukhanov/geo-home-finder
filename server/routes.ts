@@ -230,6 +230,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Reset everything for a user: remove all attraction points and zones
+  app.post("/api/reset", async (req, res) => {
+    try {
+      const userId = req.body.userId || "default-user";
+      await storage.deleteAttractionPointsForUser(userId);
+      await storage.deleteZonesForUser(userId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to reset data" });
+    }
+  });
+
   // Get zones for a user
   app.get("/api/zones", async (req, res) => {
     try {

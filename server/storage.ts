@@ -6,7 +6,8 @@ export interface IStorage {
   getAttractionPoint(id: number): Promise<AttractionPoint | undefined>;
   createAttractionPoint(point: InsertAttractionPoint): Promise<AttractionPoint>;
   deleteAttractionPoint(id: number): Promise<boolean>;
-  
+  deleteAttractionPointsForUser(userId: string): Promise<void>;
+
   // Zones
   getZones(userId: string): Promise<Zone[]>;
   createZone(zone: InsertZone): Promise<Zone>;
@@ -49,6 +50,14 @@ export class MemStorage implements IStorage {
 
   async deleteAttractionPoint(id: number): Promise<boolean> {
     return this.attractionPoints.delete(id);
+  }
+
+  async deleteAttractionPointsForUser(userId: string): Promise<void> {
+    const idsToDelete = Array.from(this.attractionPoints.entries())
+      .filter(([, point]) => point.userId === userId)
+      .map(([id]) => id);
+
+    idsToDelete.forEach((id) => this.attractionPoints.delete(id));
   }
 
   async getZones(userId: string): Promise<Zone[]> {
