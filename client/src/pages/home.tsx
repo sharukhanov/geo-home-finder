@@ -136,7 +136,9 @@ export default function Home() {
       <MapContainer
         attractionPoints={attractionPoints}
         zones={useIsochrones ? [] : zones}
-        isochrones={useIsochrones ? isochrones : []}
+        // Show only the green optimal zone by default; reveal the per-point
+        // (blue) zones only when there is no common area, to explain why.
+        isochrones={useIsochrones && !optimalArea ? isochrones : []}
         optimalArea={useIsochrones ? optimalArea : null}
         selectedPoint={selectedPoint}
         onMapClick={handleMapClick}
@@ -171,7 +173,7 @@ export default function Home() {
       )}
 
       {/* Zone Legend */}
-      {hasResults && <ZoneLegend isochroneMode={useIsochrones} />}
+      {hasResults && <ZoneLegend isochroneMode={useIsochrones} hasOptimal={!!optimalArea} />}
 
       {/* Small non-blocking calculating indicator */}
       {isCalculating && (
