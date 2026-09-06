@@ -202,10 +202,14 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
         '<div class="p-1 font-medium text-emerald-700">✓ Оптимальная зона для жилья</div>',
       );
       geoLayersRef.current.push(layer);
+    }
 
-      // Zoom the map to fit the optimal area
+    // Zoom the map to fit whatever was drawn (green area, or the blue zones
+    // when there is no common area).
+    if (geoLayersRef.current.length > 0) {
       try {
-        mapRef.current.fitBounds(layer.getBounds(), { padding: [40, 40] });
+        const group = L.featureGroup(geoLayersRef.current);
+        mapRef.current.fitBounds(group.getBounds(), { padding: [40, 40] });
       } catch {
         // ignore if bounds are invalid
       }
