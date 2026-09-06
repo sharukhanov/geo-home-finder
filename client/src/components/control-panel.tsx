@@ -74,10 +74,11 @@ export function ControlPanel({
       {/* Panel Header */}
       <div className="p-6 border-b border-slate-100">
         <h2 className="text-lg font-semibold text-slate-900 mb-2">
-          Найти оптимальное жильё
+          Где снять или купить жильё?
         </h2>
         <p className="text-sm text-slate-600">
-          Добавьте места, куда ездите каждый день — мы покажем, где удобно жить.
+          Fatera найдёт районы, из которых удобно добираться до всех важных
+          для вас мест — работы, учёбы, зала.
         </p>
       </div>
 
@@ -85,17 +86,28 @@ export function ControlPanel({
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* Onboarding hint for first-time users */}
         {!hasPoints && (
-          <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 space-y-2">
-            <div className="flex items-center gap-2 font-medium text-slate-900">
+          <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 space-y-3">
+            <div className="flex items-center gap-2 font-semibold text-slate-900">
               <Lightbulb className="w-5 h-5 text-blue-600" />
-              С чего начать
+              Как это работает
             </div>
-            <ol className="text-sm text-slate-700 space-y-1 list-decimal list-inside">
-              <li>Добавьте 2–3 места (работа, зал, учёба…).</li>
-              <li>Для каждого — адрес (или клик по карте).</li>
-              <li>Выберите, как добираетесь.</li>
-              <li>Зелёным на карте покажем, где удобно жить.</li>
-            </ol>
+            <div className="space-y-2 text-sm text-slate-700">
+              <div className="flex gap-2">
+                <span className="flex-none w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center">1</span>
+                <span>Добавьте места, куда часто ездите (работа, зал…).</span>
+              </div>
+              <div className="flex gap-2">
+                <span className="flex-none w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center">2</span>
+                <span>Укажите, как добираетесь и во сколько там бываете.</span>
+              </div>
+              <div className="flex gap-2">
+                <span className="flex-none w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center">3</span>
+                <span><strong className="text-emerald-700">Зелёная зона</strong> на карте — районы, где жить удобнее всего.</span>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 pt-1 border-t border-blue-100">
+              Пример: работа в центре + зал на юге → покажем, где снять квартиру, чтобы успевать в оба места.
+            </p>
           </div>
         )}
 

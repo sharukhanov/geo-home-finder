@@ -323,7 +323,7 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
                 name="arrivalHour"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Во сколько нужно быть на месте</FormLabel>
+                    <FormLabel>Во сколько обычно здесь бываете</FormLabel>
                     <Select
                       onValueChange={(v) => field.onChange(parseInt(v, 10))}
                       value={String(field.value)}
