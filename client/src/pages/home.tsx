@@ -156,6 +156,7 @@ export default function Home() {
           transport={transport}
           onTransportChange={setTransport}
           onClearSelectedPoint={() => setSelectedPoint(null)}
+          onPointSelected={(lat, lng) => setSelectedPoint({ lat, lng })}
           onReset={clearResults}
           showResultSummary={hasResults && useIsochrones}
         />

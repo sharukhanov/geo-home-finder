@@ -17,6 +17,7 @@ interface ControlPanelProps {
   transport: Transport;
   onTransportChange: (t: Transport) => void;
   onClearSelectedPoint: () => void;
+  onPointSelected: (lat: number, lng: number) => void;
   onReset: () => void;
   showResultSummary: boolean;
 }
@@ -33,6 +34,7 @@ export function ControlPanel({
   transport,
   onTransportChange,
   onClearSelectedPoint,
+  onPointSelected,
   onReset,
   showResultSummary,
 }: ControlPanelProps) {
@@ -146,6 +148,7 @@ export function ControlPanel({
           <AttractionPointForm
             selectedPoint={selectedPoint}
             onClearSelectedPoint={onClearSelectedPoint}
+            onPointSelected={onPointSelected}
           />
         </div>
 

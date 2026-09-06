@@ -33,6 +33,7 @@ type FormData = z.infer<typeof formSchema>;
 interface AttractionPointFormProps {
   selectedPoint: {lat: number, lng: number} | null;
   onClearSelectedPoint: () => void;
+  onPointSelected: (lat: number, lng: number) => void;
 }
 
 const arrivalHourOptions = [
@@ -47,7 +48,7 @@ const arrivalHourOptions = [
 
 const DEFAULT_TYPE = "work";
 
-export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: AttractionPointFormProps) {
+export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPointSelected }: AttractionPointFormProps) {
   const [travelTime, setTravelTime] = useState([getPointType(DEFAULT_TYPE).defaultMinutes]);
   const [address, setAddress] = useState("");
   const [suggestions, setSuggestions] = useState<GeocodeResult[]>([]);
@@ -58,6 +59,9 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
   const [hasCoords, setHasCoords] = useState(false);
   // Skip the debounced search when we set the address programmatically.
   const skipSearchRef = useRef(false);
+  // Skip reverse-geocoding when the map point came from a picked suggestion
+  // (we already have its address and don't want to overwrite it).
+  const suppressReverseRef = useRef(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -109,6 +113,12 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
   // Reverse-geocode the coordinates when a point is picked on the map.
   useEffect(() => {
     if (!selectedPoint) return;
+
+    // If this point came from a chosen suggestion, we already have its address.
+    if (suppressReverseRef.current) {
+      suppressReverseRef.current = false;
+      return;
+    }
 
     form.setValue("latitude", selectedPoint.lat);
     form.setValue("longitude", selectedPoint.lng);
@@ -179,6 +189,7 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
 
   const selectSuggestion = (suggestion: GeocodeResult) => {
     skipSearchRef.current = true;
+    suppressReverseRef.current = true;
     setAddress(suggestion.displayName);
     form.setValue("address", suggestion.displayName);
     form.setValue("latitude", suggestion.latitude);
@@ -186,6 +197,8 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint }: Att
     setHasCoords(true);
     setShowSuggestions(false);
     setSuggestions([]);
+    // Show the point on the map right away.
+    onPointSelected(suggestion.latitude, suggestion.longitude);
   };
 
   const onSubmit = async (data: FormData) => {
