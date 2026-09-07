@@ -140,18 +140,32 @@ export function AddressCheck({ onPointSelected }: AddressCheckProps) {
                 </div>
               );
             }
+            // Three states: fits, slightly over (within +20%), clearly over.
+            const closeEnough = Math.round(r.limitMinutes * 1.2);
+            const state =
+              r.minutes <= r.limitMinutes
+                ? { icon: "✓", cls: "text-emerald-600", hint: "Укладываетесь" }
+                : r.minutes <= closeEnough
+                  ? { icon: "≈", cls: "text-amber-600", hint: "Чуть дольше лимита" }
+                  : { icon: "✕", cls: "text-red-600", hint: "Заметно дольше лимита" };
+
             return (
               <div key={r.pointId} className="text-sm flex items-center justify-between gap-2">
                 <span className="text-slate-700 truncate">
                   {info.emoji} {info.name} {t?.emoji}
                 </span>
-                <span className={r.withinLimit ? "text-emerald-600 font-medium" : "text-red-600 font-medium"}>
-                  {r.withinLimit ? "✓" : "✕"} {r.minutes} мин
+                <span className={`${state.cls} font-medium`} title={state.hint}>
+                  {state.icon} {r.minutes} мин
                   <span className="text-slate-400 font-normal"> / {r.limitMinutes}</span>
                 </span>
               </div>
             );
           })}
+          <div className="text-[11px] text-slate-400 pt-1 border-t">
+            <span className="text-emerald-600">✓</span> укладываетесь ·{" "}
+            <span className="text-amber-600">≈</span> чуть дольше ·{" "}
+            <span className="text-red-600">✕</span> не подходит
+          </div>
         </div>
       )}
     </div>
