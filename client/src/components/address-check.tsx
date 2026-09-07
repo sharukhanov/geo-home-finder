@@ -144,27 +144,48 @@ export function AddressCheck({ onPointSelected }: AddressCheckProps) {
             const closeEnough = Math.round(r.limitMinutes * 1.2);
             const state =
               r.minutes <= r.limitMinutes
-                ? { icon: "✓", cls: "text-emerald-600", hint: "Укладываетесь" }
+                ? {
+                    icon: "✓",
+                    cls: "bg-emerald-100 text-emerald-800 border-emerald-300",
+                    hint: "Укладываетесь",
+                  }
                 : r.minutes <= closeEnough
-                  ? { icon: "≈", cls: "text-amber-600", hint: "Чуть дольше лимита" }
-                  : { icon: "✕", cls: "text-red-600", hint: "Заметно дольше лимита" };
+                  ? {
+                      icon: "≈",
+                      cls: "bg-amber-100 text-amber-800 border-amber-300",
+                      hint: "Чуть дольше лимита",
+                    }
+                  : {
+                      icon: "✕",
+                      cls: "bg-red-100 text-red-800 border-red-300",
+                      hint: "Заметно дольше лимита",
+                    };
 
             return (
               <div key={r.pointId} className="text-sm flex items-center justify-between gap-2">
                 <span className="text-slate-700 truncate">
                   {info.emoji} {info.name} {t?.emoji}
                 </span>
-                <span className={`${state.cls} font-medium`} title={state.hint}>
+                <span
+                  className={`${state.cls} border rounded-full px-2 py-0.5 font-semibold whitespace-nowrap`}
+                  title={state.hint}
+                >
                   {state.icon} {r.minutes} мин
-                  <span className="text-slate-400 font-normal"> / {r.limitMinutes}</span>
+                  <span className="font-normal opacity-70"> / {r.limitMinutes}</span>
                 </span>
               </div>
             );
           })}
-          <div className="text-[11px] text-slate-400 pt-1 border-t">
-            <span className="text-emerald-600">✓</span> укладываетесь ·{" "}
-            <span className="text-amber-600">≈</span> чуть дольше ·{" "}
-            <span className="text-red-600">✕</span> не подходит
+          <div className="flex flex-wrap gap-1.5 pt-2 border-t text-[11px]">
+            <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full px-1.5">
+              ✓ успеваете
+            </span>
+            <span className="bg-amber-100 text-amber-800 border border-amber-300 rounded-full px-1.5">
+              ≈ чуть дольше
+            </span>
+            <span className="bg-red-100 text-red-800 border border-red-300 rounded-full px-1.5">
+              ✕ не подходит
+            </span>
           </div>
         </div>
       )}
