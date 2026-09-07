@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertAttractionPointSchema, insertZoneSchema } from "@shared/schema";
 import { searchAddress, reverseGeocode, findDistrictsInPolygon } from "./geocode";
-import { computeOptimalArea, type Transport } from "./isochrone";
+import { computeOptimalArea } from "./isochrone";
 import { z } from "zod";
 
 // Helper function to calculate distance between two points (Haversine formula)
@@ -263,7 +263,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/zones/calculate", async (req, res) => {
     try {
       const userId = req.body.userId || "default-user";
-      const transport = (req.body.transport as Transport) || "public_transport";
 
       const points = await storage.getAttractionPoints(userId);
       if (points.length === 0) {
@@ -273,7 +272,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Try the real isochrone approach first.
       if (process.env.DGIS_API_KEY) {
         try {
-          const result = await computeOptimalArea(points, transport);
+          const result = await computeOptimalArea(points);
           if (result) {
             // Name the districts inside the zone — the practical takeaway.
             const districts = result.optimalArea
@@ -281,7 +280,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               : [];
             return res.json({
               mode: "isochrone",
-              transport,
               isochrones: result.isochrones,
               optimalArea: result.optimalArea,
               districts,

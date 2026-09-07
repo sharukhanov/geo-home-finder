@@ -102,12 +102,21 @@ async function fetchIsochrone(
 // Compute isochrones for all points and their intersection. Returns null if
 // any point's isochrone could not be fetched (so we fall back cleanly).
 export async function computeOptimalArea(
-  points: Array<{ id: number; name: string; latitude: number; longitude: number; travelTimeMinutes: number; arrivalHour: number }>,
-  transport: Transport,
+  points: Array<{
+    id: number;
+    name: string;
+    latitude: number;
+    longitude: number;
+    travelTimeMinutes: number;
+    arrivalHour: number;
+    transport: string;
+  }>,
 ): Promise<OptimalAreaResult | null> {
   const isochrones: Isochrone[] = [];
 
   for (const point of points) {
+    // Each place has its own way of getting there (drive to work, walk to gym).
+    const transport = (point.transport as Transport) || "public_transport";
     const geometry = await fetchIsochrone(
       point.latitude,
       point.longitude,

@@ -12,7 +12,6 @@ export interface IsochroneFeature {
 export type CalculateResponse =
   | {
       mode: "isochrone";
-      transport: Transport;
       isochrones: IsochroneFeature[];
       optimalArea: MultiPolygon | null;
       districts: string[];

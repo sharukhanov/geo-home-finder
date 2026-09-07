@@ -20,12 +20,13 @@ import {
   type GeocodeResult,
 } from "@/lib/map-utils";
 import { getUserId } from "@/lib/user-id";
-import { POINT_TYPES, getPointType } from "@/lib/point-types";
+import { POINT_TYPES, getPointType, TRANSPORT_CHOICES } from "@/lib/point-types";
 
 const formSchema = insertAttractionPointSchema.extend({
   type: z.enum(["work", "study", "fitness", "hobby", "family", "shopping", "other"]),
   travelTimeMinutes: z.number().min(10).max(60),
   arrivalHour: z.number().min(0).max(23),
+  transport: z.enum(["public_transport", "driving", "walking"]),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -77,6 +78,7 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
       longitude: 37.6176,
       travelTimeMinutes: getPointType(DEFAULT_TYPE).defaultMinutes,
       arrivalHour: getPointType(DEFAULT_TYPE).defaultArrivalHour,
+      transport: "public_transport",
     },
   });
 
@@ -303,6 +305,35 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
             <p className="text-xs text-emerald-600">✓ Координаты определены</p>
           )}
         </FormItem>
+
+        <FormField
+          control={form.control}
+          name="transport"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Как добираетесь сюда</FormLabel>
+              <div className="grid grid-cols-3 gap-2">
+                {TRANSPORT_CHOICES.map((choice) => (
+                  <button
+                    key={choice.value}
+                    type="button"
+                    onClick={() => field.onChange(choice.value)}
+                    className={
+                      "flex flex-col items-center justify-center gap-1 rounded-lg border py-2 text-xs transition-colors " +
+                      (field.value === choice.value
+                        ? "border-blue-500 bg-blue-50 text-blue-700 font-medium"
+                        : "border-slate-200 text-slate-600 hover:bg-slate-50")
+                    }
+                  >
+                    <span className="text-lg">{choice.emoji}</span>
+                    {choice.label}
+                  </button>
+                ))}
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         {/* Smart defaults are applied from the type; fine-tuning is optional. */}
         <div className="rounded-md bg-slate-50 p-3">

@@ -22,6 +22,12 @@ const typeEmojis: Record<string, string> = {
   'other': '📍'
 };
 
+const transportEmojis: Record<string, string> = {
+  'public_transport': '🚇',
+  'driving': '🚗',
+  'walking': '🚶'
+};
+
 const typeNames: Record<string, string> = {
   'home': 'Дом',
   'work': 'Работа',
@@ -97,6 +103,9 @@ export function PointsList({ points }: PointsListProps) {
                   </Badge>
                   <Badge variant="secondary" className="text-xs">
                     к {String(point.arrivalHour).padStart(2, "0")}:00
+                  </Badge>
+                  <Badge variant="secondary" className="text-xs">
+                    {transportEmojis[point.transport] ?? "🚇"}
                   </Badge>
                 </div>
               </div>
