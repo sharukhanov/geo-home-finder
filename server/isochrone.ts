@@ -1,19 +1,17 @@
-// Real travel-time zones via the 2GIS Isochrone API.
+// Optimal-living-area logic.
 //
-// For each attraction point we ask 2GIS "where can you get within N minutes"
-// (an isochrone). The optimal place to live is the intersection of every
-// point's isochrone — the area from which all points are reachable in time.
+// For each place we ask the routing provider "where can you get within N
+// minutes" (an isochrone). The best place to live is the intersection of every
+// place's isochrone — the area from which all of them are reachable in time.
 //
-// One request per point (cheap), unlike a per-grid-cell matrix approach.
-// Docs: https://docs.2gis.com/en/api/navigation/isochrone/overview
+// The provider behind the isochrones is chosen in server/providers/, so this
+// file holds only the product logic.
 
-import { parse as parseWkt } from "wellknown";
 import polygonClipping from "polygon-clipping";
-import type { MultiPolygon, Polygon, Geometry } from "geojson";
+import type { MultiPolygon } from "geojson";
+import { routingProvider, type Transport } from "./providers";
 
-export type Transport = "public_transport" | "driving" | "walking";
-
-const ISOCHRONE_URL = "https://routing.api.2gis.com/isochrone/2.0.0";
+export type { Transport };
 
 export interface Isochrone {
   pointId: number;
@@ -23,84 +21,12 @@ export interface Isochrone {
 
 export interface OptimalAreaResult {
   isochrones: Isochrone[];
-  // Intersection of all isochrones (where to live). Null if the reachable
-  // areas don't overlap at all.
+  /** Intersection of all isochrones. Null when they don't overlap at all. */
   optimalArea: MultiPolygon | null;
 }
 
-function toMultiPolygon(geom: Geometry | null): MultiPolygon | null {
-  if (!geom) return null;
-  if (geom.type === "MultiPolygon") return geom;
-  if (geom.type === "Polygon") {
-    return { type: "MultiPolygon", coordinates: [(geom as Polygon).coordinates] };
-  }
-  return null;
-}
-
-// Build an RFC 3339 UTC timestamp for the next weekday at the given Moscow
-// hour. Passing this to 2GIS makes it use typical (statistical) rush-hour
-// traffic for that time instead of whatever traffic happens right now.
-function nextWeekdayStartTime(hourMsk: number): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() + 1); // start from tomorrow
-  // Skip weekends (Sat=6, Sun=0) — rush hour is a weekday concept.
-  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) {
-    d.setUTCDate(d.getUTCDate() + 1);
-  }
-  // Moscow is UTC+3, so hour in UTC = hourMsk - 3.
-  d.setUTCHours(hourMsk - 3, 0, 0, 0);
-  return d.toISOString().replace(/\.\d{3}Z$/, "Z");
-}
-
-// Fetch a single point's reachability area from 2GIS. Returns null on any
-// failure so the caller can fall back to the approximate algorithm.
-async function fetchIsochrone(
-  lat: number,
-  lon: number,
-  durationSec: number,
-  transport: Transport,
-  arrivalHour: number,
-): Promise<MultiPolygon | null> {
-  const key = process.env.DGIS_API_KEY;
-  if (!key) return null;
-
-  try {
-    const response = await fetch(`${ISOCHRONE_URL}?key=${key}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        start: { lat, lon },
-        durations: [durationSec],
-        transport,
-        reverse: false,
-        start_time: nextWeekdayStartTime(arrivalHour),
-      }),
-    });
-
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      console.error(`2GIS isochrone HTTP ${response.status}: ${text.slice(0, 200)}`);
-      return null;
-    }
-
-    const data = (await response.json()) as {
-      isochrones?: Array<{ geometry?: string }>;
-    };
-    const wkt = data.isochrones?.[0]?.geometry;
-    if (!wkt) {
-      console.error("2GIS isochrone response had no geometry");
-      return null;
-    }
-
-    return toMultiPolygon(parseWkt(wkt));
-  } catch (err) {
-    console.error("2GIS isochrone request failed:", err);
-    return null;
-  }
-}
-
-// Compute isochrones for all points and their intersection. Returns null if
-// any point's isochrone could not be fetched (so we fall back cleanly).
+// Returns null if any place's isochrone could not be fetched, so the caller
+// can fall back to the approximate algorithm.
 export async function computeOptimalArea(
   points: Array<{
     id: number;
@@ -112,19 +38,20 @@ export async function computeOptimalArea(
     transport: string;
   }>,
 ): Promise<OptimalAreaResult | null> {
+  if (!routingProvider.isAvailable()) return null;
+
   const isochrones: Isochrone[] = [];
 
   for (const point of points) {
     // Each place has its own way of getting there (drive to work, walk to gym).
-    const transport = (point.transport as Transport) || "public_transport";
-    const geometry = await fetchIsochrone(
-      point.latitude,
-      point.longitude,
-      point.travelTimeMinutes * 60,
-      transport,
-      point.arrivalHour,
-    );
-    if (!geometry) return null; // a failure — let the caller fall back
+    const geometry = await routingProvider.isochrone({
+      lat: point.latitude,
+      lng: point.longitude,
+      durationSec: point.travelTimeMinutes * 60,
+      transport: (point.transport as Transport) || "public_transport",
+      arrivalHour: point.arrivalHour,
+    });
+    if (!geometry) return null;
     isochrones.push({ pointId: point.id, name: point.name, geometry });
   }
 
@@ -134,14 +61,16 @@ export async function computeOptimalArea(
   } else {
     // polygon-clipping's coordinate types are stricter tuples than GeoJSON's
     // Position[]; the shapes are identical at runtime, so cast across.
-    const geoms = isochrones.map((i) => i.geometry.coordinates as unknown as Parameters<typeof polygonClipping.intersection>[0]);
-    const intersection = polygonClipping.intersection(
-      geoms[0],
-      ...geoms.slice(1),
+    const geoms = isochrones.map(
+      (i) => i.geometry.coordinates as unknown as Parameters<typeof polygonClipping.intersection>[0],
     );
+    const intersection = polygonClipping.intersection(geoms[0], ...geoms.slice(1));
     optimalArea =
       intersection.length > 0
-        ? { type: "MultiPolygon", coordinates: intersection as unknown as MultiPolygon["coordinates"] }
+        ? {
+            type: "MultiPolygon",
+            coordinates: intersection as unknown as MultiPolygon["coordinates"],
+          }
         : null;
   }
 
