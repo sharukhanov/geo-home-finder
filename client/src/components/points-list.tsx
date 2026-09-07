@@ -79,8 +79,10 @@ export function PointsList({ points }: PointsListProps) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center space-x-2 mb-2">
                   <span className="text-lg">{typeEmojis[point.type]}</span>
+                  {/* Always render the type name: stored names may already
+                      include an emoji from older versions. */}
                   <h4 className="font-medium text-slate-900 truncate">
-                    {point.name || typeNames[point.type]}
+                    {typeNames[point.type] ?? point.name}
                   </h4>
                 </div>
                 
@@ -104,7 +106,9 @@ export function PointsList({ points }: PointsListProps) {
                 size="sm"
                 onClick={() => handleDelete(point.id)}
                 disabled={deletePointMutation.isPending}
-                className="text-slate-400 hover:text-red-500 ml-2"
+                title="Удалить это место"
+                aria-label="Удалить это место"
+                className="text-slate-500 hover:text-red-600 hover:bg-red-50 ml-2 flex-none"
               >
                 <Trash2 className="w-4 h-4" />
               </Button>

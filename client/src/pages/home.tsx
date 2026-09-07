@@ -3,9 +3,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { MultiPolygon } from "geojson";
 import { MapContainer } from "@/components/map-container";
 import { ControlPanel } from "@/components/control-panel";
-import { ZoneLegend } from "@/components/zone-legend";
+import { ResultCard } from "@/components/result-card";
 import { Button } from "@/components/ui/button";
-import { MapPin, Menu, Loader2 } from "lucide-react";
+import { MapPin, Menu, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserId } from "@/lib/user-id";
@@ -13,14 +13,21 @@ import type { Transport, IsochroneFeature, CalculateResponse } from "@/lib/geo-t
 import { useToast } from "@/hooks/use-toast";
 import type { AttractionPoint, Zone } from "@shared/schema";
 
+const transportChoices: { value: Transport; emoji: string; label: string }[] = [
+  { value: "public_transport", emoji: "🚇", label: "Транспорт" },
+  { value: "driving", emoji: "🚗", label: "Авто" },
+  { value: "walking", emoji: "🚶", label: "Пешком" },
+];
+
 export default function Home() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [selectedPoint, setSelectedPoint] = useState<{lat: number, lng: number} | null>(null);
   const [transport, setTransport] = useState<Transport>("public_transport");
-  // Isochrone-mode results (real travel-time zones). Empty in circle mode.
   const [isochrones, setIsochrones] = useState<IsochroneFeature[]>([]);
   const [optimalArea, setOptimalArea] = useState<MultiPolygon | null>(null);
+  const [districts, setDistricts] = useState<string[]>([]);
   const [useIsochrones, setUseIsochrones] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -47,6 +54,7 @@ export default function Home() {
   const clearResults = useCallback(() => {
     setIsochrones([]);
     setOptimalArea(null);
+    setDistricts([]);
     setUseIsochrones(false);
   }, []);
 
@@ -66,17 +74,12 @@ export default function Home() {
         setUseIsochrones(true);
         setIsochrones(data.isochrones);
         setOptimalArea(data.optimalArea);
-        if (!data.optimalArea && data.isochrones.length > 1) {
-          toast({
-            title: "Общая зона не найдена",
-            description: "До всех точек не успеть за заданное время. Увеличьте время в пути или выберите более близкие места.",
-            variant: "destructive",
-          });
-        }
+        setDistricts(data.districts ?? []);
       } else {
         setUseIsochrones(false);
         setIsochrones([]);
         setOptimalArea(null);
+        setDistricts([]);
         queryClient.invalidateQueries({ queryKey: ["/api/zones"] });
       }
     },
@@ -85,6 +88,24 @@ export default function Home() {
       toast({
         title: "Ошибка расчёта",
         description: "Произошла ошибка при расчёте зон. Попробуйте ещё раз.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deletePointMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/attraction-points/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/attraction-points"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/zones"] });
+      toast({ title: "Место удалено" });
+    },
+    onError: () => {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось удалить место. Попробуйте ещё раз.",
         variant: "destructive",
       });
     },
@@ -106,8 +127,6 @@ export default function Home() {
     setSelectedPoint({ lat, lng });
   }, []);
 
-  const togglePanel = () => setIsPanelOpen(!isPanelOpen);
-
   const hasResults = useIsochrones ? isochrones.length > 0 : zones.length > 0;
 
   return (
@@ -121,14 +140,29 @@ export default function Home() {
             </div>
             <h1 className="text-xl font-bold text-slate-900">Fatera</h1>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={togglePanel}
-            className="lg:hidden"
-          >
-            <Menu className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Collapse the panel to see the whole map (desktop) */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsPanelCollapsed((v) => !v)}
+              className="hidden lg:flex"
+            >
+              {isPanelCollapsed ? (
+                <><PanelLeftOpen className="w-4 h-4 mr-2" />Показать панель</>
+              ) : (
+                <><PanelLeftClose className="w-4 h-4 mr-2" />Скрыть панель</>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsPanelOpen(!isPanelOpen)}
+              className="lg:hidden"
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -136,31 +170,49 @@ export default function Home() {
       <MapContainer
         attractionPoints={attractionPoints}
         zones={useIsochrones ? [] : zones}
-        // Show only the green optimal zone by default; reveal the per-point
-        // (blue) zones only when there is no common area, to explain why.
         isochrones={useIsochrones && !optimalArea ? isochrones : []}
         optimalArea={useIsochrones ? optimalArea : null}
         selectedPoint={selectedPoint}
         onMapClick={handleMapClick}
+        onDeletePoint={(id) => deletePointMutation.mutate(id)}
         className="absolute inset-0 z-0"
       />
+
+      {/* Transport switcher over the map */}
+      <div className="absolute top-20 right-4 z-30 flex bg-white rounded-lg shadow-md overflow-hidden">
+        {transportChoices.map((choice) => (
+          <button
+            key={choice.value}
+            type="button"
+            onClick={() => setTransport(choice.value)}
+            title={choice.label}
+            className={
+              "flex items-center gap-1.5 px-3 py-2 text-xs transition-colors " +
+              (transport === choice.value
+                ? "bg-blue-50 text-blue-700 font-medium"
+                : "text-slate-600 hover:bg-slate-50")
+            }
+          >
+            <span className="text-base">{choice.emoji}</span>
+            <span className="hidden sm:inline">{choice.label}</span>
+          </button>
+        ))}
+      </div>
 
       {/* Control Panel */}
       <div
         className={cn(
           "absolute top-16 left-0 bottom-0 w-full lg:w-96 bg-white z-30 transition-transform duration-300 ease-in-out shadow-xl lg:shadow-lg border-r border-slate-200",
-          isPanelOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          isPanelOpen ? "translate-x-0" : "-translate-x-full",
+          isPanelCollapsed ? "lg:-translate-x-full" : "lg:translate-x-0"
         )}
       >
         <ControlPanel
           attractionPoints={attractionPoints}
           selectedPoint={selectedPoint}
-          transport={transport}
-          onTransportChange={setTransport}
           onClearSelectedPoint={() => setSelectedPoint(null)}
           onPointSelected={(lat, lng) => setSelectedPoint({ lat, lng })}
           onReset={clearResults}
-          showResultSummary={hasResults && useIsochrones}
         />
       </div>
 
@@ -172,8 +224,16 @@ export default function Home() {
         />
       )}
 
-      {/* Zone Legend */}
-      {hasResults && <ZoneLegend isochroneMode={useIsochrones} hasOptimal={!!optimalArea} />}
+      {/* Result card */}
+      {hasResults && (
+        <ResultCard
+          hasOptimal={useIsochrones ? !!optimalArea : true}
+          districts={districts}
+          transport={transport}
+          points={attractionPoints}
+          approximate={!useIsochrones}
+        />
+      )}
 
       {/* Small non-blocking calculating indicator */}
       {isCalculating && (

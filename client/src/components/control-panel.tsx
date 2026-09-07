@@ -1,46 +1,36 @@
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AttractionPointForm } from "./attraction-point-form";
 import { PointsList } from "./points-list";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { PlusCircle, BarChart3, RotateCcw, Lightbulb, CheckCircle2 } from "lucide-react";
+import { PlusCircle, RotateCcw, Lightbulb } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserId } from "@/lib/user-id";
-import type { Transport } from "@/lib/geo-types";
-import { getPointType, TRANSPORT_LABELS } from "@/lib/point-types";
 import { useToast } from "@/hooks/use-toast";
 import type { AttractionPoint } from "@shared/schema";
 
 interface ControlPanelProps {
   attractionPoints: AttractionPoint[];
   selectedPoint: {lat: number, lng: number} | null;
-  transport: Transport;
-  onTransportChange: (t: Transport) => void;
   onClearSelectedPoint: () => void;
   onPointSelected: (lat: number, lng: number) => void;
   onReset: () => void;
-  showResultSummary: boolean;
 }
-
-const transportChoices: { value: Transport; emoji: string; label: string }[] = [
-  { value: "public_transport", emoji: "🚇", label: "Транспорт" },
-  { value: "driving", emoji: "🚗", label: "Авто" },
-  { value: "walking", emoji: "🚶", label: "Пешком" },
-];
 
 export function ControlPanel({
   attractionPoints,
   selectedPoint,
-  transport,
-  onTransportChange,
   onClearSelectedPoint,
   onPointSelected,
   onReset,
-  showResultSummary,
 }: ControlPanelProps) {
   const hasPoints = attractionPoints.length > 0;
+  // Once the user has places, the form collapses into a single button.
+  const [showForm, setShowForm] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const formVisible = !hasPoints || showForm;
 
   const resetMutation = useMutation({
     mutationFn: async () => {
@@ -51,10 +41,8 @@ export function ControlPanel({
       queryClient.invalidateQueries({ queryKey: ["/api/zones"] });
       onClearSelectedPoint();
       onReset();
-      toast({
-        title: "Всё сброшено",
-        description: "Точки и зоны удалены. Можно начать заново.",
-      });
+      setShowForm(false);
+      toast({ title: "Всё сброшено", description: "Можно начать заново." });
     },
     onError: () => {
       toast({
@@ -66,7 +54,7 @@ export function ControlPanel({
   });
 
   const handleReset = () => {
-    if (window.confirm("Удалить все точки и зоны?")) {
+    if (window.confirm("Удалить все места и зоны?")) {
       resetMutation.mutate();
     }
   };
@@ -74,137 +62,67 @@ export function ControlPanel({
   return (
     <div className="h-full flex flex-col">
       {/* Panel Header */}
-      <div className="p-6 border-b border-slate-100">
-        <h2 className="text-lg font-semibold text-slate-900 mb-2">
+      <div className="px-6 py-4 border-b border-slate-100">
+        <h2 className="text-lg font-semibold text-slate-900">
           Где снять или купить жильё?
         </h2>
-        <p className="text-sm text-slate-600">
-          Fatera найдёт районы, из которых удобно добираться до всех важных
-          для вас мест — работы, учёбы, зала.
+        <p className="text-sm text-slate-600 mt-1">
+          Добавьте места, куда ездите регулярно — покажем, где удобно жить.
         </p>
       </div>
 
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
         {/* Onboarding hint for first-time users */}
         {!hasPoints && (
-          <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 space-y-3">
-            <div className="flex items-center gap-2 font-semibold text-slate-900">
-              <Lightbulb className="w-5 h-5 text-blue-600" />
+          <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-slate-700">
+            <div className="flex items-center gap-2 font-medium text-slate-900 mb-1">
+              <Lightbulb className="w-4 h-4 text-blue-600" />
               Как это работает
             </div>
-            <div className="space-y-2 text-sm text-slate-700">
-              <div className="flex gap-2">
-                <span className="flex-none w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center">1</span>
-                <span>Добавьте места, куда часто ездите (работа, зал…).</span>
-              </div>
-              <div className="flex gap-2">
-                <span className="flex-none w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center">2</span>
-                <span>Укажите, как добираетесь и во сколько там бываете.</span>
-              </div>
-              <div className="flex gap-2">
-                <span className="flex-none w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center">3</span>
-                <span><strong className="text-emerald-700">Зелёная зона</strong> на карте — районы, где жить удобнее всего.</span>
-              </div>
-            </div>
-            <p className="text-xs text-slate-500 pt-1 border-t border-blue-100">
-              Пример: работа в центре + зал на юге → покажем, где снять квартиру, чтобы успевать в оба места.
-            </p>
+            Добавьте 2–3 места (работа, зал…) — на карте зелёным покажем районы,
+            откуда вы успеваете во все из них.
           </div>
         )}
 
-        {/* Transport selector */}
-        <div className="space-y-2">
-          <h3 className="font-medium text-slate-900 text-sm">Как добираетесь</h3>
-          <div className="grid grid-cols-3 gap-2">
-            {transportChoices.map((choice) => (
-              <button
-                key={choice.value}
-                type="button"
-                onClick={() => onTransportChange(choice.value)}
-                className={
-                  "flex flex-col items-center justify-center gap-1 rounded-lg border py-2 text-xs transition-colors " +
-                  (transport === choice.value
-                    ? "border-blue-500 bg-blue-50 text-blue-700 font-medium"
-                    : "border-slate-200 text-slate-600 hover:bg-slate-50")
-                }
-              >
-                <span className="text-lg">{choice.emoji}</span>
-                {choice.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Add Attraction Point Section */}
-        <div className="space-y-4">
-          <h3 className="font-medium text-slate-900 flex items-center">
-            <PlusCircle className="w-5 h-5 mr-2 text-blue-600" />
-            Добавить место
-          </h3>
-
+        {formVisible ? (
           <AttractionPointForm
             selectedPoint={selectedPoint}
             onClearSelectedPoint={onClearSelectedPoint}
             onPointSelected={onPointSelected}
+            onAdded={() => setShowForm(false)}
           />
-        </div>
+        ) : (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => setShowForm(true)}
+          >
+            <PlusCircle className="w-4 h-4 mr-2" />
+            Добавить ещё место
+          </Button>
+        )}
 
         {/* Points List */}
         {hasPoints && (
-          <>
-            <Separator />
-            <div className="space-y-4">
-              <h3 className="font-medium text-slate-900 flex items-center">
-                <BarChart3 className="w-5 h-5 mr-2 text-emerald-600" />
-                Добавленные места ({attractionPoints.length})
-              </h3>
-              <PointsList points={attractionPoints} />
+          <div className="space-y-2 pt-2">
+            <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+              Ваши места ({attractionPoints.length})
             </div>
-          </>
-        )}
-
-        {/* Methodology summary after calculation */}
-        {showResultSummary && hasPoints && (
-          <>
-            <Separator />
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4 space-y-2">
-              <div className="flex items-center gap-2 font-medium text-slate-900">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                Как посчитали
-              </div>
-              <p className="text-sm text-slate-700">
-                Способ передвижения: <strong>{TRANSPORT_LABELS[transport]?.emoji} {TRANSPORT_LABELS[transport]?.label}</strong>.
-                Учли типичные пробки в будни на нужное время:
-              </p>
-              <ul className="text-sm text-slate-700 space-y-1">
-                {attractionPoints.map((point) => {
-                  const info = getPointType(point.type);
-                  return (
-                    <li key={point.id}>
-                      {info.emoji} <strong>{info.name}</strong> — не дольше {point.travelTimeMinutes} мин, к {String(point.arrivalHour).padStart(2, "0")}:00
-                    </li>
-                  );
-                })}
-              </ul>
-              <p className="text-xs text-slate-500 pt-1">
-                Зелёная зона — места, откуда успеваете во все точки к нужному времени.
-              </p>
-            </div>
-          </>
+            <PointsList points={attractionPoints} />
+          </div>
         )}
       </div>
 
       {/* Reset */}
       {hasPoints && (
-        <div className="p-6 border-t border-slate-100">
+        <div className="px-6 py-4 border-t border-slate-100">
           <Button
             onClick={handleReset}
             disabled={resetMutation.isPending}
-            variant="outline"
-            className="w-full"
+            variant="ghost"
+            size="sm"
+            className="w-full text-slate-500"
           >
             <RotateCcw className="w-4 h-4 mr-2" />
             {resetMutation.isPending ? "Сбрасываем..." : "Сбросить всё"}

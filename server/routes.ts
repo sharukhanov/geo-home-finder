@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertAttractionPointSchema, insertZoneSchema } from "@shared/schema";
-import { searchAddress, reverseGeocode } from "./geocode";
+import { searchAddress, reverseGeocode, findDistrictsInPolygon } from "./geocode";
 import { computeOptimalArea, type Transport } from "./isochrone";
 import { z } from "zod";
 
@@ -275,11 +275,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const result = await computeOptimalArea(points, transport);
           if (result) {
+            // Name the districts inside the zone — the practical takeaway.
+            const districts = result.optimalArea
+              ? await findDistrictsInPolygon(result.optimalArea)
+              : [];
             return res.json({
               mode: "isochrone",
               transport,
               isochrones: result.isochrones,
               optimalArea: result.optimalArea,
+              districts,
             });
           }
           console.warn("Isochrone computation unavailable; falling back to approximate mode");

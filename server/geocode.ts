@@ -34,6 +34,11 @@ export interface GeocodeResult {
   longitude: number;
 }
 
+// Minimal shape of a GeoJSON MultiPolygon (avoids a hard dep here).
+export interface DgisPolygon {
+  coordinates: number[][][][];
+}
+
 // --- 2GIS ---------------------------------------------------------------
 
 interface DgisItem {
@@ -104,6 +109,53 @@ async function dgisReverse(lat: number, lon: number): Promise<GeocodeResult[]> {
     lon: String(lon),
   });
   return dgisItemsToResults(items);
+}
+
+// Reduce a ring to at most `max` vertices so the WKT stays short enough for
+// a URL. Isochrone outlines can have hundreds of points.
+function simplifyRing(ring: number[][], max = 30): number[][] {
+  if (ring.length <= max) return ring;
+  const step = Math.ceil(ring.length / max);
+  const out: number[][] = [];
+  for (let i = 0; i < ring.length; i += step) out.push(ring[i]);
+  return out;
+}
+
+// Which city districts fall inside the optimal zone — this is what the user
+// actually needs ("look for a flat in Shchukino, Pokrovskoe-Streshnevo…").
+export async function findDistrictsInPolygon(area: DgisPolygon): Promise<string[]> {
+  if (!DGIS_KEY) return [];
+
+  const rings = area.coordinates.map((poly) => poly[0]).filter(Boolean);
+  if (rings.length === 0) return [];
+
+  // Use the largest ring — the main body of the zone.
+  const largest = rings.reduce((a, b) => (b.length > a.length ? b : a));
+  const simplified = simplifyRing(largest);
+  if (simplified.length < 4) return [];
+
+  // WKT rings must be closed.
+  const first = simplified[0];
+  const last = simplified[simplified.length - 1];
+  const closed =
+    first[0] === last[0] && first[1] === last[1] ? simplified : [...simplified, first];
+
+  const wkt = `POLYGON((${closed
+    .map(([lon, lat]) => `${lon.toFixed(6)} ${lat.toFixed(6)}`)
+    .join(",")}))`;
+
+  try {
+    const items = await dgisFetch(DGIS_ITEMS_URL, {
+      polygon: wkt,
+      type: "adm_div.district",
+      page_size: "20",
+    });
+    const names = items.map((item) => item.name || item.full_name || "").filter(Boolean);
+    return Array.from(new Set(names));
+  } catch (err) {
+    console.error("District lookup failed:", err);
+    return [];
+  }
 }
 
 // --- Nominatim ----------------------------------------------------------
