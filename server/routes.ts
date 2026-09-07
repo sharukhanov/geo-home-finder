@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { insertAttractionPointSchema, insertZoneSchema } from "@shared/schema";
 import { searchAddress, reverseGeocode, findDistrictsInPolygon } from "./geocode";
 import { computeOptimalArea } from "./isochrone";
+import { travelTimeMinutes } from "./travel-time";
 import { z } from "zod";
 
 // Helper function to calculate distance between two points (Haversine formula)
@@ -310,6 +311,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ mode: "circle", zones: newZones });
     } catch (error) {
       res.status(500).json({ message: "Failed to calculate zones" });
+    }
+  });
+
+  // Check a specific candidate address: real travel time to each place.
+  app.post("/api/check-address", async (req, res) => {
+    try {
+      const userId = req.body.userId || "default-user";
+      const lat = parseFloat(req.body.lat);
+      const lng = parseFloat(req.body.lng);
+      if (Number.isNaN(lat) || Number.isNaN(lng)) {
+        return res.status(400).json({ message: "Invalid coordinates" });
+      }
+
+      const points = await storage.getAttractionPoints(userId);
+      const results = await Promise.all(
+        points.map(async (point) => {
+          const minutes = await travelTimeMinutes(
+            { lat, lng },
+            { lat: point.latitude, lng: point.longitude },
+            point.transport,
+          );
+          return {
+            pointId: point.id,
+            type: point.type,
+            transport: point.transport,
+            limitMinutes: point.travelTimeMinutes,
+            minutes,
+            withinLimit: minutes !== null ? minutes <= point.travelTimeMinutes : null,
+          };
+        }),
+      );
+
+      res.json({ results });
+    } catch (error) {
+      console.error("Address check failed:", error);
+      res.status(500).json({ message: "Failed to check address" });
     }
   });
 
