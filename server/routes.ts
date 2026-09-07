@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { insertAttractionPointSchema, insertZoneSchema } from "@shared/schema";
 import { searchAddress, reverseGeocode, findDistrictsInPolygon } from "./geocode";
 import { computeOptimalArea } from "./isochrone";
+import { routingProvider } from "./providers";
 import { travelTimeMinutes } from "./travel-time";
 import { renderFeedbackPage } from "./feedback-page";
 import { z } from "zod";
@@ -272,7 +273,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Try the real isochrone approach first.
-      if (process.env.DGIS_API_KEY) {
+      if (routingProvider.isAvailable()) {
         try {
           const result = await computeOptimalArea(points);
           if (result) {

@@ -1,189 +1,12 @@
-// Geocoding: 2GIS first (best coverage for Russian addresses, metro, POIs),
-// with OpenStreetMap Nominatim as a fallback.
-//
-// Requests are proxied through the backend so we can set a proper User-Agent
-// (required by Nominatim), keep the API key server-side, and avoid CORS.
+// Geocoding orchestration: try each configured provider in order.
+// The provider implementations live in server/providers/.
 
-const NOMINATIM_BASE =
-  process.env.GEOCODER_BASE_URL ?? "https://nominatim.openstreetmap.org";
+import type { MultiPolygon } from "geojson";
+import { geocodingProviders, type GeocodeResult } from "./providers";
 
-const USER_AGENT =
-  process.env.GEOCODER_USER_AGENT ??
-  "Fatera/1.0 (housing-optimizer; contact: example@example.com)";
+export type { GeocodeResult };
 
-const COUNTRY_CODES = process.env.GEOCODER_COUNTRY_CODES ?? "ru";
-const LANGUAGE = process.env.GEOCODER_LANGUAGE ?? "ru";
-
-const DGIS_KEY = process.env.DGIS_API_KEY;
-// Full-text catalog search (addresses, streets, metro stations, POIs).
-const DGIS_ITEMS_URL = "https://catalog.api.2gis.com/3.0/items";
-// Reverse geocoding (coordinates -> nearest address).
-const DGIS_GEOCODE_URL = "https://catalog.api.2gis.com/3.0/items/geocode";
-
-// Bias search toward a city so results aren't scattered across the country.
-// Defaults to central Moscow; override via env for other cities.
-const BIAS_LON = process.env.GEOCODER_BIAS_LON ?? "37.6176";
-const BIAS_LAT = process.env.GEOCODER_BIAS_LAT ?? "55.7558";
-const BIAS_RADIUS = process.env.GEOCODER_BIAS_RADIUS ?? "40000"; // meters
-// Nominatim viewbox around the same area (west,south,east,north).
-const NOMINATIM_VIEWBOX = process.env.GEOCODER_VIEWBOX ?? "37.2,55.4,38.0,56.0";
-
-export interface GeocodeResult {
-  displayName: string;
-  latitude: number;
-  longitude: number;
-}
-
-// Minimal shape of a GeoJSON MultiPolygon (avoids a hard dep here).
-export interface DgisPolygon {
-  coordinates: number[][][][];
-}
-
-// --- 2GIS ---------------------------------------------------------------
-
-interface DgisItem {
-  full_name?: string;
-  name?: string;
-  address_name?: string;
-  point?: { lat: number; lon: number };
-}
-
-function dgisItemsToResults(items: DgisItem[]): GeocodeResult[] {
-  return items
-    .filter((item) => item.point)
-    .map((item) => ({
-      // full_name is the most complete ("г Москва, Волоколамское шоссе, 71к1");
-      // fall back to name + address for POIs like metro stations.
-      displayName:
-        item.full_name ||
-        [item.name, item.address_name].filter(Boolean).join(", ") ||
-        item.name ||
-        "",
-      latitude: item.point!.lat,
-      longitude: item.point!.lon,
-    }))
-    .filter((r) => r.displayName);
-}
-
-async function dgisFetch(baseUrl: string, params: Record<string, string>): Promise<DgisItem[]> {
-  if (!DGIS_KEY) return [];
-
-  const url = new URL(baseUrl);
-  url.searchParams.set("key", DGIS_KEY);
-  url.searchParams.set("fields", "items.point,items.full_name,items.address_name");
-  url.searchParams.set("locale", "ru_RU");
-  for (const [key, value] of Object.entries(params)) {
-    url.searchParams.set(key, value);
-  }
-
-  const response = await fetch(url);
-  if (!response.ok) {
-    // 404 = nothing found (normal). Log other errors so key/access issues surface.
-    if (response.status !== 404) {
-      console.error(`2GIS HTTP ${response.status} for ${baseUrl}`);
-    }
-    return [];
-  }
-
-  const data = (await response.json()) as { result?: { items?: DgisItem[] } };
-  return data.result?.items ?? [];
-}
-
-// Forward search over the 2GIS catalog (addresses, streets, metro, POIs),
-// biased to the configured city so results aren't scattered nationwide.
-async function dgisSearch(query: string, limit: number): Promise<GeocodeResult[]> {
-  const items = await dgisFetch(DGIS_ITEMS_URL, {
-    q: query,
-    page_size: String(limit),
-    location: `${BIAS_LON},${BIAS_LAT}`,
-    radius: BIAS_RADIUS,
-    type: "building,street,station,attraction,adm_div.place,adm_div.city,branch",
-  });
-  return dgisItemsToResults(items);
-}
-
-// Reverse geocoding via the dedicated 2GIS endpoint.
-async function dgisReverse(lat: number, lon: number): Promise<GeocodeResult[]> {
-  const items = await dgisFetch(DGIS_GEOCODE_URL, {
-    lat: String(lat),
-    lon: String(lon),
-  });
-  return dgisItemsToResults(items);
-}
-
-// Reduce a ring to at most `max` vertices so the WKT stays short enough for
-// a URL. Isochrone outlines can have hundreds of points.
-function simplifyRing(ring: number[][], max = 30): number[][] {
-  if (ring.length <= max) return ring;
-  const step = Math.ceil(ring.length / max);
-  const out: number[][] = [];
-  for (let i = 0; i < ring.length; i += step) out.push(ring[i]);
-  return out;
-}
-
-// Which city districts fall inside the optimal zone — this is what the user
-// actually needs ("look for a flat in Shchukino, Pokrovskoe-Streshnevo…").
-export async function findDistrictsInPolygon(area: DgisPolygon): Promise<string[]> {
-  if (!DGIS_KEY) return [];
-
-  const rings = area.coordinates.map((poly) => poly[0]).filter(Boolean);
-  if (rings.length === 0) return [];
-
-  // Use the largest ring — the main body of the zone.
-  const largest = rings.reduce((a, b) => (b.length > a.length ? b : a));
-  const simplified = simplifyRing(largest);
-  if (simplified.length < 4) return [];
-
-  // WKT rings must be closed.
-  const first = simplified[0];
-  const last = simplified[simplified.length - 1];
-  const closed =
-    first[0] === last[0] && first[1] === last[1] ? simplified : [...simplified, first];
-
-  const wkt = `POLYGON((${closed
-    .map(([lon, lat]) => `${lon.toFixed(6)} ${lat.toFixed(6)}`)
-    .join(",")}))`;
-
-  try {
-    const items = await dgisFetch(DGIS_ITEMS_URL, {
-      polygon: wkt,
-      type: "adm_div.district",
-      page_size: "20",
-    });
-    const names = items.map((item) => item.name || item.full_name || "").filter(Boolean);
-    return Array.from(new Set(names));
-  } catch (err) {
-    console.error("District lookup failed:", err);
-    return [];
-  }
-}
-
-// --- Nominatim ----------------------------------------------------------
-
-interface NominatimPlace {
-  display_name: string;
-  lat: string;
-  lon: string;
-}
-
-async function nominatimFetch(path: string, params: Record<string, string>) {
-  const url = new URL(`${NOMINATIM_BASE}${path}`);
-  url.searchParams.set("format", "jsonv2");
-  url.searchParams.set("accept-language", LANGUAGE);
-  for (const [key, value] of Object.entries(params)) {
-    url.searchParams.set(key, value);
-  }
-
-  const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
-  if (!response.ok) {
-    throw new Error(`Geocoder responded with ${response.status}`);
-  }
-  return response.json();
-}
-
-// --- Public API ---------------------------------------------------------
-
-// Forward geocoding: address string -> list of candidate locations.
+// Forward geocoding: address string -> candidate locations.
 export async function searchAddress(
   query: string,
   limit = 5,
@@ -191,34 +14,16 @@ export async function searchAddress(
   const trimmed = query.trim();
   if (!trimmed) return [];
 
-  // Prefer 2GIS full-text search.
-  try {
-    const dgis = await dgisSearch(trimmed, limit);
-    if (dgis.length > 0) return dgis;
-  } catch (err) {
-    console.error("2GIS search failed, falling back to Nominatim:", err);
+  for (const provider of geocodingProviders) {
+    if (!provider.isAvailable()) continue;
+    try {
+      const results = await provider.search(trimmed, limit);
+      if (results.length > 0) return results;
+    } catch (err) {
+      console.error(`Geocoder "${provider.name}" search failed:`, err);
+    }
   }
-
-  // Fallback: Nominatim, bounded to the configured area so results stay local.
-  try {
-    const places = (await nominatimFetch("/search", {
-      q: trimmed,
-      limit: String(limit),
-      countrycodes: COUNTRY_CODES,
-      addressdetails: "0",
-      viewbox: NOMINATIM_VIEWBOX,
-      bounded: "1",
-    })) as NominatimPlace[];
-
-    return places.map((place) => ({
-      displayName: place.display_name,
-      latitude: parseFloat(place.lat),
-      longitude: parseFloat(place.lon),
-    }));
-  } catch (err) {
-    console.error("Nominatim search failed:", err);
-    return [];
-  }
+  return [];
 }
 
 // Reverse geocoding: coordinates -> human-readable address.
@@ -226,29 +31,28 @@ export async function reverseGeocode(
   lat: number,
   lng: number,
 ): Promise<GeocodeResult | null> {
-  // Prefer 2GIS.
-  try {
-    const dgis = await dgisReverse(lat, lng);
-    if (dgis.length > 0) return dgis[0];
-  } catch (err) {
-    console.error("2GIS reverse geocode failed, falling back to Nominatim:", err);
+  for (const provider of geocodingProviders) {
+    if (!provider.isAvailable()) continue;
+    try {
+      const result = await provider.reverse(lat, lng);
+      if (result) return result;
+    } catch (err) {
+      console.error(`Geocoder "${provider.name}" reverse failed:`, err);
+    }
   }
+  return null;
+}
 
-  // Fallback: Nominatim.
-  try {
-    const place = (await nominatimFetch("/reverse", {
-      lat: String(lat),
-      lon: String(lng),
-    })) as NominatimPlace | { error: string };
-
-    if (!("display_name" in place)) return null;
-    return {
-      displayName: place.display_name,
-      latitude: parseFloat(place.lat),
-      longitude: parseFloat(place.lon),
-    };
-  } catch (err) {
-    console.error("Nominatim reverse failed:", err);
-    return null;
+// Districts inside the optimal zone — the practical takeaway for a search.
+// Uses the first provider that supports it.
+export async function findDistrictsInPolygon(area: MultiPolygon): Promise<string[]> {
+  for (const provider of geocodingProviders) {
+    if (!provider.isAvailable() || !provider.districtsInPolygon) continue;
+    try {
+      return await provider.districtsInPolygon(area);
+    } catch (err) {
+      console.error(`Provider "${provider.name}" district lookup failed:`, err);
+    }
   }
+  return [];
 }
