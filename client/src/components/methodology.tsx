@@ -1,12 +1,16 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 interface MethodologyProps {
   open: boolean;
   onClose: () => void;
+  // Shown when opened from the onboarding, so the user can go back to it.
+  showBack?: boolean;
 }
 
 // Answers the question users ask most often: how is the zone calculated?
-export function Methodology({ open, onClose }: MethodologyProps) {
+export function Methodology({ open, onClose, showBack = false }: MethodologyProps) {
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
@@ -80,6 +84,13 @@ export function Methodology({ open, onClose }: MethodologyProps) {
             Данные о дорогах, пробках и расписаниях транспорта — 2ГИС.
             Карта — OpenStreetMap.
           </div>
+
+          {showBack && (
+            <Button variant="outline" className="w-full" onClick={onClose}>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Назад
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

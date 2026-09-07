@@ -27,6 +27,9 @@ export default function Home() {
     }
   });
   const [showMethodology, setShowMethodology] = useState(false);
+  // True when the methodology was opened from the onboarding, so closing it
+  // returns there instead of dropping the user on an empty map.
+  const [returnToOnboarding, setReturnToOnboarding] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [selectedPoint, setSelectedPoint] = useState<{lat: number, lng: number} | null>(null);
   const [isochrones, setIsochrones] = useState<IsochroneFeature[]>([]);
@@ -236,11 +239,23 @@ export default function Home() {
         open={showOnboarding}
         onClose={closeOnboarding}
         onShowMethodology={() => {
-          closeOnboarding();
+          // Hide the onboarding without marking it as seen — we come back to it.
+          setShowOnboarding(false);
+          setReturnToOnboarding(true);
           setShowMethodology(true);
         }}
       />
-      <Methodology open={showMethodology} onClose={() => setShowMethodology(false)} />
+      <Methodology
+        open={showMethodology}
+        showBack={returnToOnboarding}
+        onClose={() => {
+          setShowMethodology(false);
+          if (returnToOnboarding) {
+            setReturnToOnboarding(false);
+            setShowOnboarding(true);
+          }
+        }}
+      />
 
       {/* Small non-blocking calculating indicator */}
       {isCalculating && (
