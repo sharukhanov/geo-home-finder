@@ -34,6 +34,7 @@ interface AttractionPointFormProps {
   selectedPoint: {lat: number, lng: number} | null;
   onClearSelectedPoint: () => void;
   onPointSelected: (lat: number, lng: number) => void;
+  onAdded: () => void;
 }
 
 const arrivalHourOptions = [
@@ -48,7 +49,7 @@ const arrivalHourOptions = [
 
 const DEFAULT_TYPE = "work";
 
-export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPointSelected }: AttractionPointFormProps) {
+export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPointSelected, onAdded }: AttractionPointFormProps) {
   const [travelTime, setTravelTime] = useState([getPointType(DEFAULT_TYPE).defaultMinutes]);
   const [address, setAddress] = useState("");
   const [suggestions, setSuggestions] = useState<GeocodeResult[]>([]);
@@ -96,9 +97,10 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
       setShowAdvanced(false);
       setTravelTime([getPointType(DEFAULT_TYPE).defaultMinutes]);
       onClearSelectedPoint();
+      onAdded();
       toast({
-        title: "Точка добавлена",
-        description: "Место добавлено на карту",
+        title: "Место добавлено",
+        description: "Зоны пересчитываются автоматически",
       });
     },
     onError: () => {
@@ -226,10 +228,9 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
       data.longitude = coords.lng;
     }
 
-    // Name is derived from the type.
+    // Name is derived from the type (the emoji is added when rendering).
     if (!data.name.trim()) {
-      const info = getPointType(data.type);
-      data.name = `${info.emoji} ${info.name}`;
+      data.name = getPointType(data.type).name;
     }
 
     createPointMutation.mutate(data);
@@ -244,20 +245,24 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
           render={({ field }) => (
             <FormItem>
               <FormLabel>Что это за место</FormLabel>
-              <Select onValueChange={handleTypeChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Выберите тип места" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {POINT_TYPES.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.emoji} {option.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex flex-wrap gap-2">
+                {POINT_TYPES.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => handleTypeChange(option.value)}
+                    className={
+                      "flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm transition-colors " +
+                      (field.value === option.value
+                        ? "border-blue-500 bg-blue-50 text-blue-700 font-medium"
+                        : "border-slate-200 text-slate-600 hover:bg-slate-50")
+                    }
+                  >
+                    <span>{option.emoji}</span>
+                    {option.name}
+                  </button>
+                ))}
+              </div>
               <FormMessage />
             </FormItem>
           )}

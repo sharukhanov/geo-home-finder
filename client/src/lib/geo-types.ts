@@ -15,6 +15,7 @@ export type CalculateResponse =
       transport: Transport;
       isochrones: IsochroneFeature[];
       optimalArea: MultiPolygon | null;
+      districts: string[];
     }
   | {
       mode: "circle";

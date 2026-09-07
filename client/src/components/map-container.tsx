@@ -11,11 +11,15 @@ interface MapContainerProps {
   isochrones?: IsochroneFeature[];
   optimalArea?: MultiPolygon | null;
   onMapClick: (lat: number, lng: number) => void;
+  onDeletePoint?: (id: number) => void;
   selectedPoint?: {lat: number, lng: number} | null;
   className?: string;
 }
 
-export function MapContainer({ attractionPoints, zones, isochrones = [], optimalArea = null, onMapClick, selectedPoint, className }: MapContainerProps) {
+export function MapContainer({ attractionPoints, zones, isochrones = [], optimalArea = null, onMapClick, onDeletePoint, selectedPoint, className }: MapContainerProps) {
+  // Kept in a ref so marker rebuilding doesn't depend on callback identity.
+  const onDeletePointRef = useRef(onDeletePoint);
+  onDeletePointRef.current = onDeletePoint;
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<L.Marker[]>([]);
@@ -115,17 +119,32 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
       `;
       marker.bindTooltip(tooltipContent, { direction: "top", offset: [0, -12] });
 
-      const popupContent = `
-        <div class="p-2">
-          <div class="font-medium">${emoji} ${typeName}</div>
-          <div class="text-sm text-slate-600 mt-1">${point.address}</div>
-          <div class="text-xs text-slate-500 mt-1">
-            Время в пути: до ${point.travelTimeMinutes} мин · нужно к ${arrival}:00
-          </div>
+      // Popup with the point details and a delete action.
+      const popupEl = document.createElement("div");
+      popupEl.style.minWidth = "180px";
+      const info = document.createElement("div");
+      info.innerHTML = `
+        <div style="font-weight:600">${emoji} ${typeName}</div>
+        <div style="font-size:13px;color:#475569;margin-top:2px">${point.address}</div>
+        <div style="font-size:12px;color:#64748b;margin-top:2px">
+          до ${point.travelTimeMinutes} мин · к ${arrival}:00
         </div>
       `;
+      popupEl.appendChild(info);
 
-      marker.bindPopup(popupContent);
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.textContent = "Удалить это место";
+      deleteBtn.style.cssText =
+        "margin-top:8px;width:100%;padding:6px 8px;border:1px solid #fecaca;background:#fef2f2;" +
+        "color:#dc2626;border-radius:6px;font-size:13px;cursor:pointer";
+      deleteBtn.onclick = () => {
+        mapRef.current?.closePopup();
+        onDeletePointRef.current?.(point.id);
+      };
+      popupEl.appendChild(deleteBtn);
+
+      marker.bindPopup(popupEl);
       markersRef.current.push(marker);
     });
   }, [attractionPoints]);
