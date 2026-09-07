@@ -5,6 +5,7 @@ import { insertAttractionPointSchema, insertZoneSchema } from "@shared/schema";
 import { searchAddress, reverseGeocode, findDistrictsInPolygon } from "./geocode";
 import { computeOptimalArea } from "./isochrone";
 import { travelTimeMinutes } from "./travel-time";
+import { renderFeedbackPage } from "./feedback-page";
 import { z } from "zod";
 
 // Helper function to calculate distance between two points (Haversine formula)
@@ -360,8 +361,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     try {
       const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
-      res.json(await storage.listFeedback(limit));
+      const entries = await storage.listFeedback(limit);
+
+      // Readable page in the browser; raw JSON on request.
+      if (req.query.format === "json") {
+        return res.json(entries);
+      }
+      res.type("html").send(renderFeedbackPage(entries));
     } catch (error) {
+      console.error("Failed to load feedback:", error);
       res.status(500).json({ message: "Failed to load feedback" });
     }
   });
