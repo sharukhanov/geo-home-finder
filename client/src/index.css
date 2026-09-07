@@ -57,3 +57,12 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+/* Keep Leaflet controls clear of the app header. */
+.leaflet-top .leaflet-control {
+  margin-top: 76px;
+}
+
+/* Attribution shouldn't sit under the result card. */
+.leaflet-bottom.leaflet-right .leaflet-control-attribution {
+  margin-bottom: 0;
+}

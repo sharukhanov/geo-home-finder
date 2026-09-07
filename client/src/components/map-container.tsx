@@ -32,7 +32,11 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
     if (!mapContainerRef.current || mapRef.current) return;
 
     // Moscow center coordinates
-    mapRef.current = L.map(mapContainerRef.current).setView([55.7558, 37.6176], 11);
+    // Default zoom buttons sit top-left, hidden under the header and panel —
+    // move them to the top-right (CSS pushes them below the header).
+    mapRef.current = L.map(mapContainerRef.current, { zoomControl: false })
+      .setView([55.7558, 37.6176], 11);
+    L.control.zoom({ position: "topright" }).addTo(mapRef.current);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
@@ -338,7 +342,6 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
     <div 
       ref={mapContainerRef}
       className={cn("h-full w-full", className)}
-      style={{ minHeight: '100vh' }}
     />
   );
 }
