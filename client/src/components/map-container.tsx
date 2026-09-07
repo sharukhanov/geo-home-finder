@@ -37,6 +37,9 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
     mapRef.current = L.map(mapContainerRef.current, { zoomControl: false })
       .setView([55.7558, 37.6176], 11);
     L.control.zoom({ position: "topright" }).addTo(mapRef.current);
+    // Drop Leaflet's own prefix (it carries a flag icon). The OpenStreetMap
+    // credit below stays — it is required by the map data licence.
+    mapRef.current.attributionControl.setPrefix(false);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'

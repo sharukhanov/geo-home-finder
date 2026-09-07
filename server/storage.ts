@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
-import { attractionPoints, zones, type AttractionPoint, type InsertAttractionPoint, type Zone, type InsertZone } from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
+import { attractionPoints, zones, feedback, type AttractionPoint, type InsertAttractionPoint, type Zone, type InsertZone, type Feedback, type InsertFeedback } from "@shared/schema";
 import { db } from "./db";
 
 export interface IStorage {
@@ -14,19 +14,28 @@ export interface IStorage {
   getZones(userId: string): Promise<Zone[]>;
   createZone(zone: InsertZone): Promise<Zone>;
   deleteZonesForUser(userId: string): Promise<void>;
+
+  // Feedback
+  createFeedback(entry: InsertFeedback): Promise<Feedback>;
+  addFeedbackComment(id: number, comment: string): Promise<boolean>;
+  listFeedback(limit: number): Promise<Feedback[]>;
 }
 
 export class MemStorage implements IStorage {
   private attractionPoints: Map<number, AttractionPoint>;
   private zones: Map<number, Zone>;
+  private feedback: Map<number, Feedback>;
   private currentPointId: number;
   private currentZoneId: number;
+  private currentFeedbackId: number;
 
   constructor() {
     this.attractionPoints = new Map();
     this.zones = new Map();
+    this.feedback = new Map();
     this.currentPointId = 1;
     this.currentZoneId = 1;
+    this.currentFeedbackId = 1;
   }
 
   async getAttractionPoints(userId: string): Promise<AttractionPoint[]> {
@@ -86,10 +95,36 @@ export class MemStorage implements IStorage {
     const zonesToDelete = Array.from(this.zones.entries()).filter(
       ([_, zone]) => zone.userId === userId,
     );
-    
+
     zonesToDelete.forEach(([id]) => {
       this.zones.delete(id);
     });
+  }
+
+  async createFeedback(entry: InsertFeedback): Promise<Feedback> {
+    const id = this.currentFeedbackId++;
+    const saved: Feedback = {
+      ...entry,
+      id,
+      comment: entry.comment ?? null,
+      context: entry.context ?? null,
+      createdAt: new Date(),
+    };
+    this.feedback.set(id, saved);
+    return saved;
+  }
+
+  async addFeedbackComment(id: number, comment: string): Promise<boolean> {
+    const existing = this.feedback.get(id);
+    if (!existing) return false;
+    this.feedback.set(id, { ...existing, comment });
+    return true;
+  }
+
+  async listFeedback(limit: number): Promise<Feedback[]> {
+    return Array.from(this.feedback.values())
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
   }
 }
 
@@ -141,6 +176,24 @@ export class DbStorage implements IStorage {
 
   async deleteZonesForUser(userId: string): Promise<void> {
     await db.delete(zones).where(eq(zones.userId, userId));
+  }
+
+  async createFeedback(entry: InsertFeedback): Promise<Feedback> {
+    const rows = await db.insert(feedback).values(entry).returning();
+    return rows[0];
+  }
+
+  async addFeedbackComment(id: number, comment: string): Promise<boolean> {
+    const rows = await db
+      .update(feedback)
+      .set({ comment })
+      .where(eq(feedback.id, id))
+      .returning({ id: feedback.id });
+    return rows.length > 0;
+  }
+
+  async listFeedback(limit: number): Promise<Feedback[]> {
+    return db.select().from(feedback).orderBy(desc(feedback.createdAt)).limit(limit);
   }
 }
 
