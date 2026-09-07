@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { getPointType, TRANSPORT_LABELS } from "@/lib/point-types";
+import { FeedbackWidget } from "./feedback-widget";
 import type { AttractionPoint } from "@shared/schema";
 
 interface ResultCardProps {
@@ -84,6 +85,20 @@ export function ResultCard({
             </div>
           </div>
         )}
+
+        <FeedbackWidget
+          context={{
+            hasOptimal,
+            approximate,
+            districts,
+            places: points.map((p) => ({
+              type: p.type,
+              transport: p.transport,
+              limitMinutes: p.travelTimeMinutes,
+              arrivalHour: p.arrivalHour,
+            })),
+          }}
+        />
       </CardContent>
     </Card>
   );

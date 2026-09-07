@@ -50,5 +50,14 @@ export async function ensureSchema(): Promise<void> {
       point_id INTEGER REFERENCES attraction_points(id),
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS feedback (
+      id SERIAL PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      rating TEXT NOT NULL,
+      comment TEXT,
+      context TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
   `);
 }

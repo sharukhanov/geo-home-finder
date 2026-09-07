@@ -314,6 +314,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // --- Feedback (anonymous, tied to the browser id) ---
+
+  // Record a thumbs up/down on the current result.
+  app.post("/api/feedback", async (req, res) => {
+    try {
+      const userId = req.body.userId || "default-user";
+      const rating = req.body.rating;
+      if (rating !== "like" && rating !== "dislike") {
+        return res.status(400).json({ message: "Invalid rating" });
+      }
+      const context =
+        req.body.context != null ? JSON.stringify(req.body.context).slice(0, 4000) : null;
+
+      const saved = await storage.createFeedback({ userId, rating, context, comment: null });
+      res.status(201).json({ id: saved.id });
+    } catch (error) {
+      console.error("Failed to save feedback:", error);
+      res.status(500).json({ message: "Failed to save feedback" });
+    }
+  });
+
+  // Attach an optional written comment to an existing rating.
+  app.patch("/api/feedback/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const comment = String(req.body.comment ?? "").slice(0, 2000);
+      if (Number.isNaN(id) || !comment.trim()) {
+        return res.status(400).json({ message: "Invalid comment" });
+      }
+      const updated = await storage.addFeedbackComment(id, comment);
+      if (!updated) return res.status(404).json({ message: "Feedback not found" });
+      res.status(204).send();
+    } catch (error) {
+      console.error("Failed to save comment:", error);
+      res.status(500).json({ message: "Failed to save comment" });
+    }
+  });
+
+  // Read collected feedback. Only available when ADMIN_TOKEN is configured.
+  app.get("/api/feedback", async (req, res) => {
+    const adminToken = process.env.ADMIN_TOKEN;
+    if (!adminToken || req.query.token !== adminToken) {
+      return res.status(404).json({ message: "Not found" });
+    }
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+      res.json(await storage.listFeedback(limit));
+    } catch (error) {
+      res.status(500).json({ message: "Failed to load feedback" });
+    }
+  });
+
   // Check a specific candidate address: real travel time to each place.
   app.post("/api/check-address", async (req, res) => {
     try {

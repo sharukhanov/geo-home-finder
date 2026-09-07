@@ -30,6 +30,26 @@ export const zones = pgTable("zones", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Anonymous feedback on a calculation: a thumb plus an optional comment.
+// Tied to the browser's anonymous id — no accounts needed.
+export const feedback = pgTable("feedback", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  rating: text("rating").notNull(), // like | dislike
+  comment: text("comment"),
+  // JSON snapshot of what was on screen when the user rated.
+  context: text("context"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertFeedbackSchema = createInsertSchema(feedback).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
+export type Feedback = typeof feedback.$inferSelect;
+
 export const insertAttractionPointSchema = createInsertSchema(attractionPoints).omit({
   id: true,
   createdAt: true,
