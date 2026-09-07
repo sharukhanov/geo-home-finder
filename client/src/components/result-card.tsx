@@ -20,7 +20,7 @@ export function ResultCard({
   const [showDetails, setShowDetails] = useState(false);
 
   return (
-    <Card className="absolute bottom-4 right-4 z-30 bg-white shadow-lg animate-in slide-in-from-bottom-2 duration-300 max-w-xs">
+    <Card className="absolute bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-xs z-30 bg-white shadow-lg animate-in slide-in-from-bottom-2 duration-300 max-h-[45vh] overflow-y-auto">
       <CardContent className="p-4 space-y-2">
         {hasOptimal ? (
           <>

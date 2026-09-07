@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Loader2, SlidersHorizontal } from "lucide-react";
+import { Loader2, SlidersHorizontal, ChevronDown, ChevronUp } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { insertAttractionPointSchema } from "@shared/schema";
@@ -311,7 +311,7 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
           name="transport"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Как добираетесь сюда</FormLabel>
+              <FormLabel>Как планируете добираться до этой точки?</FormLabel>
               <div className="grid grid-cols-3 gap-2">
                 {TRANSPORT_CHOICES.map((choice) => (
                   <button
@@ -346,7 +346,13 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
               <SlidersHorizontal className="w-4 h-4 text-slate-500" />
               Время в пути: до {travelTime[0]} мин · к {String(arrivalHour).padStart(2, "0")}:00
             </span>
-            <span className="text-xs text-blue-600">{showAdvanced ? "скрыть" : "изменить"}</span>
+            <span className="text-slate-400" aria-label={showAdvanced ? "Скрыть настройки" : "Изменить время"}>
+              {showAdvanced ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </span>
           </button>
 
           {showAdvanced && (

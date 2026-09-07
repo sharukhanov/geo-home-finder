@@ -4,8 +4,10 @@ import type { MultiPolygon } from "geojson";
 import { MapContainer } from "@/components/map-container";
 import { ControlPanel } from "@/components/control-panel";
 import { ResultCard } from "@/components/result-card";
+import { Onboarding } from "@/components/onboarding";
+import { Methodology } from "@/components/methodology";
 import { Button } from "@/components/ui/button";
-import { MapPin, Menu, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { MapPin, Menu, Loader2, PanelLeftClose, PanelLeftOpen, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserId } from "@/lib/user-id";
@@ -16,6 +18,15 @@ import type { AttractionPoint, Zone } from "@shared/schema";
 export default function Home() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
+  // Show the explainer once per browser.
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    try {
+      return localStorage.getItem("fatera-onboarded") !== "1";
+    } catch {
+      return true;
+    }
+  });
+  const [showMethodology, setShowMethodology] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [selectedPoint, setSelectedPoint] = useState<{lat: number, lng: number} | null>(null);
   const [isochrones, setIsochrones] = useState<IsochroneFeature[]>([]);
@@ -117,10 +128,19 @@ export default function Home() {
     setSelectedPoint({ lat, lng });
   }, []);
 
+  const closeOnboarding = useCallback(() => {
+    setShowOnboarding(false);
+    try {
+      localStorage.setItem("fatera-onboarded", "1");
+    } catch {
+      // ignore — the explainer will simply show again next time
+    }
+  }, []);
+
   const hasResults = useIsochrones ? isochrones.length > 0 : zones.length > 0;
 
   return (
-    <div className="relative h-screen w-full overflow-hidden">
+    <div className="relative h-screen h-[100dvh] w-full overflow-hidden">
       {/* Header */}
       <header className="absolute top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-sm border-b border-slate-200">
         <div className="px-4 py-3 flex items-center justify-between">
@@ -131,6 +151,15 @@ export default function Home() {
             <h1 className="text-xl font-bold text-slate-900">Fatera</h1>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowMethodology(true)}
+              title="Как считается зона"
+            >
+              <HelpCircle className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Как это считается</span>
+            </Button>
             {/* Collapse the panel to see the whole map (desktop) */}
             <Button
               variant="outline"
@@ -193,8 +222,8 @@ export default function Home() {
         />
       )}
 
-      {/* Result card */}
-      {hasResults && (
+      {/* Result card — hidden while the mobile panel covers the screen */}
+      {hasResults && !isPanelOpen && (
         <ResultCard
           hasOptimal={useIsochrones ? !!optimalArea : true}
           districts={districts}
@@ -202,6 +231,16 @@ export default function Home() {
           approximate={!useIsochrones}
         />
       )}
+
+      <Onboarding
+        open={showOnboarding}
+        onClose={closeOnboarding}
+        onShowMethodology={() => {
+          closeOnboarding();
+          setShowMethodology(true);
+        }}
+      />
+      <Methodology open={showMethodology} onClose={() => setShowMethodology(false)} />
 
       {/* Small non-blocking calculating indicator */}
       {isCalculating && (

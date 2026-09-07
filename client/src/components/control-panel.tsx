@@ -4,6 +4,17 @@ import { AttractionPointForm } from "./attraction-point-form";
 import { AddressCheck } from "./address-check";
 import { PointsList } from "./points-list";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { PlusCircle, RotateCcw, Lightbulb } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserId } from "@/lib/user-id";
@@ -54,11 +65,6 @@ export function ControlPanel({
     },
   });
 
-  const handleReset = () => {
-    if (window.confirm("Удалить все места и зоны?")) {
-      resetMutation.mutate();
-    }
-  };
 
   return (
     <div className="h-full flex flex-col">
@@ -124,16 +130,37 @@ export function ControlPanel({
       {/* Reset */}
       {hasPoints && (
         <div className="px-6 py-4 border-t border-slate-100">
-          <Button
-            onClick={handleReset}
-            disabled={resetMutation.isPending}
-            variant="ghost"
-            size="sm"
-            className="w-full text-slate-500"
-          >
-            <RotateCcw className="w-4 h-4 mr-2" />
-            {resetMutation.isPending ? "Сбрасываем..." : "Сбросить всё"}
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                disabled={resetMutation.isPending}
+                variant="ghost"
+                size="sm"
+                className="w-full text-slate-500"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                {resetMutation.isPending ? "Сбрасываем..." : "Сбросить всё"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Удалить все места?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Мы удалим все добавленные места и рассчитанные зоны.
+                  Это действие нельзя отменить.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Оставить</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => resetMutation.mutate()}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Удалить всё
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       )}
     </div>
