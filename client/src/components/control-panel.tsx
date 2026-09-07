@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AttractionPointForm } from "./attraction-point-form";
+import { AddressCheck } from "./address-check";
 import { PointsList } from "./points-list";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, RotateCcw, Lightbulb } from "lucide-react";
@@ -110,6 +111,12 @@ export function ControlPanel({
               Ваши места ({attractionPoints.length})
             </div>
             <PointsList points={attractionPoints} />
+          </div>
+        )}
+
+        {hasPoints && (
+          <div className="pt-2 border-t border-slate-100">
+            <AddressCheck onPointSelected={onPointSelected} />
           </div>
         )}
       </div>
