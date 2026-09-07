@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
@@ -28,19 +28,38 @@ export function AddressCheck({ onPointSelected }: AddressCheckProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [checked, setChecked] = useState<{ name: string; results: CheckResult[] } | null>(null);
+  // Don't re-search right after we fill the field from a picked suggestion.
+  const skipSearchRef = useRef(false);
 
-  const handleSearch = async () => {
-    const trimmed = query.trim();
-    if (trimmed.length < 3) return;
-    setIsSearching(true);
-    try {
-      setSuggestions(await searchAddress(trimmed));
-    } finally {
-      setIsSearching(false);
+  // Search as the user types, same behaviour as the add-place form.
+  useEffect(() => {
+    if (skipSearchRef.current) {
+      skipSearchRef.current = false;
+      return;
     }
-  };
+
+    const trimmed = query.trim();
+    if (trimmed.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+
+    setIsSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        setSuggestions(await searchAddress(trimmed));
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [query]);
 
   const check = async (suggestion: GeocodeResult) => {
+    skipSearchRef.current = true;
     setSuggestions([]);
     setQuery(suggestion.displayName);
     onPointSelected(suggestion.latitude, suggestion.longitude);
@@ -75,21 +94,15 @@ export function AddressCheck({ onPointSelected }: AddressCheckProps) {
           placeholder="Например: Славянский бульвар"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleSearch())}
           autoComplete="off"
         />
-        <button
-          type="button"
-          onClick={handleSearch}
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-          aria-label="Найти адрес"
-        >
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400">
           {isSearching ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
             <Search className="w-4 h-4" />
           )}
-        </button>
+        </span>
 
         {suggestions.length > 0 && (
           <ul className="absolute z-50 mt-1 w-full max-h-52 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
