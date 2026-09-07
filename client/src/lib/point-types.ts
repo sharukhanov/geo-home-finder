@@ -29,3 +29,10 @@ export const TRANSPORT_LABELS: Record<string, { emoji: string; label: string }> 
   driving: { emoji: "🚗", label: "Автомобиль" },
   walking: { emoji: "🚶", label: "Пешком" },
 };
+
+// Short labels for the per-place transport chips.
+export const TRANSPORT_CHOICES = [
+  { value: "public_transport", emoji: "🚇", label: "Транспорт" },
+  { value: "driving", emoji: "🚗", label: "Авто" },
+  { value: "walking", emoji: "🚶", label: "Пешком" },
+] as const;

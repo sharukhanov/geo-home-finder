@@ -45,6 +45,7 @@ export class MemStorage implements IStorage {
       ...insertPoint,
       id,
       arrivalHour: insertPoint.arrivalHour ?? 9,
+      transport: insertPoint.transport ?? "public_transport",
       createdAt: new Date(),
     };
     this.attractionPoints.set(id, point);

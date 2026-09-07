@@ -105,9 +105,16 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
         'other': 'Другое'
       };
 
+      const transportEmojis: Record<string, string> = {
+        'public_transport': '🚇',
+        'driving': '🚗',
+        'walking': '🚶'
+      };
+
       const emoji = typeEmojis[point.type] ?? '📍';
       const typeName = typeNames[point.type] ?? point.type;
       const arrival = String(point.arrivalHour).padStart(2, '0');
+      const transportEmoji = transportEmojis[point.transport] ?? '🚇';
 
       const marker = L.marker([point.latitude, point.longitude]).addTo(mapRef.current);
 
@@ -115,7 +122,7 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
       // remember what they set for each point.
       const tooltipContent = `
         <div style="font-weight:600">${emoji} ${typeName}</div>
-        <div style="font-size:12px;color:#475569">до ${point.travelTimeMinutes} мин · к ${arrival}:00</div>
+        <div style="font-size:12px;color:#475569">${transportEmoji} до ${point.travelTimeMinutes} мин · к ${arrival}:00</div>
       `;
       marker.bindTooltip(tooltipContent, { direction: "top", offset: [0, -12] });
 
@@ -127,7 +134,7 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
         <div style="font-weight:600">${emoji} ${typeName}</div>
         <div style="font-size:13px;color:#475569;margin-top:2px">${point.address}</div>
         <div style="font-size:12px;color:#64748b;margin-top:2px">
-          до ${point.travelTimeMinutes} мин · к ${arrival}:00
+          ${transportEmoji} до ${point.travelTimeMinutes} мин · к ${arrival}:00
         </div>
       `;
       popupEl.appendChild(info);

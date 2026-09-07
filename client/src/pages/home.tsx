@@ -9,22 +9,15 @@ import { MapPin, Menu, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-rea
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserId } from "@/lib/user-id";
-import type { Transport, IsochroneFeature, CalculateResponse } from "@/lib/geo-types";
+import type { IsochroneFeature, CalculateResponse } from "@/lib/geo-types";
 import { useToast } from "@/hooks/use-toast";
 import type { AttractionPoint, Zone } from "@shared/schema";
-
-const transportChoices: { value: Transport; emoji: string; label: string }[] = [
-  { value: "public_transport", emoji: "🚇", label: "Транспорт" },
-  { value: "driving", emoji: "🚗", label: "Авто" },
-  { value: "walking", emoji: "🚶", label: "Пешком" },
-];
 
 export default function Home() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [selectedPoint, setSelectedPoint] = useState<{lat: number, lng: number} | null>(null);
-  const [transport, setTransport] = useState<Transport>("public_transport");
   const [isochrones, setIsochrones] = useState<IsochroneFeature[]>([]);
   const [optimalArea, setOptimalArea] = useState<MultiPolygon | null>(null);
   const [districts, setDistricts] = useState<string[]>([]);
@@ -59,12 +52,9 @@ export default function Home() {
   }, []);
 
   const calculateZonesMutation = useMutation({
-    mutationFn: async (mode: Transport) => {
+    mutationFn: async () => {
       setIsCalculating(true);
-      const response = await apiRequest("POST", "/api/zones/calculate", {
-        userId,
-        transport: mode,
-      });
+      const response = await apiRequest("POST", "/api/zones/calculate", { userId });
       return response.json() as Promise<CalculateResponse>;
     },
     onSuccess: (data) => {
@@ -119,9 +109,9 @@ export default function Home() {
       clearResults();
       return;
     }
-    const timer = setTimeout(() => mutateRef.current(transport), 500);
+    const timer = setTimeout(() => mutateRef.current(), 500);
     return () => clearTimeout(timer);
-  }, [attractionPoints, transport, clearResults]);
+  }, [attractionPoints, clearResults]);
 
   const handleMapClick = useCallback((lat: number, lng: number) => {
     setSelectedPoint({ lat, lng });
@@ -178,27 +168,6 @@ export default function Home() {
         className="absolute inset-0 z-0"
       />
 
-      {/* Transport switcher over the map */}
-      <div className="absolute top-20 right-4 z-30 flex bg-white rounded-lg shadow-md overflow-hidden">
-        {transportChoices.map((choice) => (
-          <button
-            key={choice.value}
-            type="button"
-            onClick={() => setTransport(choice.value)}
-            title={choice.label}
-            className={
-              "flex items-center gap-1.5 px-3 py-2 text-xs transition-colors " +
-              (transport === choice.value
-                ? "bg-blue-50 text-blue-700 font-medium"
-                : "text-slate-600 hover:bg-slate-50")
-            }
-          >
-            <span className="text-base">{choice.emoji}</span>
-            <span className="hidden sm:inline">{choice.label}</span>
-          </button>
-        ))}
-      </div>
-
       {/* Control Panel */}
       <div
         className={cn(
@@ -229,7 +198,6 @@ export default function Home() {
         <ResultCard
           hasOptimal={useIsochrones ? !!optimalArea : true}
           districts={districts}
-          transport={transport}
           points={attractionPoints}
           approximate={!useIsochrones}
         />

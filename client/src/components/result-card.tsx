@@ -2,13 +2,11 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { getPointType, TRANSPORT_LABELS } from "@/lib/point-types";
-import type { Transport } from "@/lib/geo-types";
 import type { AttractionPoint } from "@shared/schema";
 
 interface ResultCardProps {
   hasOptimal: boolean;
   districts: string[];
-  transport: Transport;
   points: AttractionPoint[];
   approximate?: boolean;
 }
@@ -16,7 +14,6 @@ interface ResultCardProps {
 export function ResultCard({
   hasOptimal,
   districts,
-  transport,
   points,
   approximate = false,
 }: ResultCardProps) {
@@ -70,14 +67,12 @@ export function ResultCard({
 
         {showDetails && (
           <div className="text-xs text-slate-600 space-y-1 border-t pt-2">
-            <div>
-              Способ: <strong>{TRANSPORT_LABELS[transport]?.emoji} {TRANSPORT_LABELS[transport]?.label}</strong>
-            </div>
             {points.map((point) => {
               const info = getPointType(point.type);
+              const t = TRANSPORT_LABELS[point.transport];
               return (
                 <div key={point.id}>
-                  {info.emoji} {info.name} — до {point.travelTimeMinutes} мин, к{" "}
+                  {info.emoji} {info.name} — {t?.emoji} до {point.travelTimeMinutes} мин, к{" "}
                   {String(point.arrivalHour).padStart(2, "0")}:00
                 </div>
               );
