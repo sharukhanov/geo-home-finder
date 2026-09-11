@@ -2,7 +2,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Clock } from "lucide-react";
+import { useState } from "react";
+import { Trash2, Clock, Pencil } from "lucide-react";
+import { EditPointDialog } from "./edit-point-dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { AttractionPoint } from "@shared/schema";
@@ -40,6 +42,7 @@ const typeNames: Record<string, string> = {
 };
 
 export function PointsList({ points }: PointsListProps) {
+  const [editing, setEditing] = useState<AttractionPoint | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -110,21 +113,35 @@ export function PointsList({ points }: PointsListProps) {
                 </div>
               </div>
               
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDelete(point.id)}
-                disabled={deletePointMutation.isPending}
-                title="Удалить это место"
-                aria-label="Удалить это место"
-                className="text-slate-500 hover:text-red-600 hover:bg-red-50 ml-2 flex-none"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
+              <div className="flex flex-none ml-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditing(point)}
+                  title="Изменить это место"
+                  aria-label="Изменить это место"
+                  className="text-slate-500 hover:text-blue-600 hover:bg-blue-50"
+                >
+                  <Pencil className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDelete(point.id)}
+                  disabled={deletePointMutation.isPending}
+                  title="Удалить это место"
+                  aria-label="Удалить это место"
+                  className="text-slate-500 hover:text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
       ))}
+
+      <EditPointDialog point={editing} onClose={() => setEditing(null)} />
     </div>
   );
 }

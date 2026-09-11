@@ -26,6 +26,9 @@ const PUBLIC_TRANSPORT_URL = "https://routing.api.2gis.com/public_transport/2.0"
 const ITEMS_URL = "https://catalog.api.2gis.com/3.0/items";
 const GEOCODE_URL = "https://catalog.api.2gis.com/3.0/items/geocode";
 
+// Documented ceiling for a single isochrone duration.
+const MAX_ISOCHRONE_SEC = 3600;
+
 const PT_MODES = [
   "metro",
   "light_metro",
@@ -155,6 +158,16 @@ export const dgisProvider: RoutingProvider & GeocodingProvider = {
   },
 
   async isochrone({ lat, lng, durationSec, transport, arrivalHour }: IsochroneRequest) {
+    // 2GIS documents a 3600s ceiling per isochrone. We still send longer
+    // durations (the cap can be raised per account), but log it so a failed
+    // long-commute zone is easy to explain.
+    if (durationSec > MAX_ISOCHRONE_SEC) {
+      console.warn(
+        `Isochrone duration ${durationSec}s exceeds the documented 2GIS limit ` +
+          `of ${MAX_ISOCHRONE_SEC}s — the request may be rejected.`,
+      );
+    }
+
     const data = await postJson(ISOCHRONE_URL, {
       start: { lat, lon: lng },
       durations: [durationSec],

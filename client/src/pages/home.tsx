@@ -7,7 +7,7 @@ import { ResultCard } from "@/components/result-card";
 import { Onboarding } from "@/components/onboarding";
 import { Methodology } from "@/components/methodology";
 import { Button } from "@/components/ui/button";
-import { MapPin, Menu, Loader2, PanelLeftClose, PanelLeftOpen, HelpCircle } from "lucide-react";
+import { MapPin, Menu, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserId } from "@/lib/user-id";
@@ -154,15 +154,6 @@ export default function Home() {
             <h1 className="text-xl font-bold text-slate-900">Fatera</h1>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowMethodology(true)}
-              title="Как считается зона"
-            >
-              <HelpCircle className="w-4 h-4 sm:mr-2" />
-              <span className="hidden sm:inline">Как это считается</span>
-            </Button>
             {/* Collapse the panel to see the whole map (desktop) */}
             <Button
               variant="outline"
@@ -214,6 +205,7 @@ export default function Home() {
           onClearSelectedPoint={() => setSelectedPoint(null)}
           onPointSelected={(lat, lng) => setSelectedPoint({ lat, lng })}
           onReset={clearResults}
+          onShowMethodology={() => setShowMethodology(true)}
         />
       </div>
 

@@ -218,6 +218,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update an existing attraction point (time, transport, type…).
+  app.patch("/api/attraction-points/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (Number.isNaN(id)) {
+        return res.status(400).json({ message: "Invalid id" });
+      }
+
+      const patchSchema = z.object({
+        type: z.string().min(1).optional(),
+        name: z.string().min(1).optional(),
+        address: z.string().min(1).optional(),
+        latitude: z.number().optional(),
+        longitude: z.number().optional(),
+        travelTimeMinutes: z.number().int().min(5).max(180).optional(),
+        arrivalHour: z.number().int().min(0).max(23).optional(),
+        transport: z.enum(["public_transport", "driving", "walking"]).optional(),
+      });
+      const patch = patchSchema.parse(req.body);
+
+      const updated = await storage.updateAttractionPoint(id, patch);
+      if (!updated) {
+        return res.status(404).json({ message: "Attraction point not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      console.error("Failed to update attraction point:", error);
+      res.status(500).json({ message: "Failed to update attraction point" });
+    }
+  });
+
   // Delete attraction point
   app.delete("/api/attraction-points/:id", async (req, res) => {
     try {

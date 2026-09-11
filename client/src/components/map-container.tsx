@@ -41,8 +41,12 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
     // credit below stays — it is required by the map data licence.
     mapRef.current.attributionControl.setPrefix(false);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
+    // CARTO Positron: a clean, muted modern basemap. Its light grey palette
+    // keeps the coloured zones readable, unlike the default OSM tiles.
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap contributors © CARTO',
+      subdomains: 'abcd',
+      maxZoom: 20,
     }).addTo(mapRef.current);
 
     return () => {
@@ -209,6 +213,9 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
     isochrones.forEach((iso) => {
       if (!mapRef.current) return;
       const layer = L.geoJSON(iso.geometry, {
+        // Let clicks pass through to the map so a point can be added inside
+        // a zone.
+        interactive: false,
         style: {
           color: "#2563EB",
           weight: 2,
@@ -223,17 +230,17 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
     // Draw the optimal area (intersection of all isochrones) filled in green
     if (optimalArea) {
       const layer = L.geoJSON(optimalArea, {
+        // Non-interactive so the user can click inside the green zone to add
+        // a place there (the popup used to swallow those clicks).
+        interactive: false,
         style: {
-          color: "#10B981",
+          color: "#059669",
           weight: 2,
           opacity: 0.9,
           fillColor: "#10B981",
-          fillOpacity: 0.35,
+          fillOpacity: 0.3,
         },
       }).addTo(mapRef.current);
-      layer.bindPopup(
-        '<div class="p-1 font-medium text-emerald-700">✓ Оптимальная зона для жилья</div>',
-      );
       geoLayersRef.current.push(layer);
     }
 
