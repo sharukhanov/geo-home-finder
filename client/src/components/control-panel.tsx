@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { PlusCircle, RotateCcw, Lightbulb } from "lucide-react";
+import { PlusCircle, RotateCcw, HelpCircle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserId } from "@/lib/user-id";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +27,7 @@ interface ControlPanelProps {
   onClearSelectedPoint: () => void;
   onPointSelected: (lat: number, lng: number) => void;
   onReset: () => void;
+  onShowMethodology: () => void;
 }
 
 export function ControlPanel({
@@ -35,6 +36,7 @@ export function ControlPanel({
   onClearSelectedPoint,
   onPointSelected,
   onReset,
+  onShowMethodology,
 }: ControlPanelProps) {
   const hasPoints = attractionPoints.length > 0;
   // Once the user has places, the form collapses into a single button.
@@ -80,15 +82,22 @@ export function ControlPanel({
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-        {/* Onboarding hint for first-time users */}
+        {/* Hint for first-time users, with the single explainer entry point. */}
         {!hasPoints && (
-          <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-slate-700">
-            <div className="flex items-center gap-2 font-medium text-slate-900 mb-1">
-              <Lightbulb className="w-4 h-4 text-blue-600" />
-              Как это работает
+          <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-slate-700 space-y-2">
+            <div>
+              Добавьте 2–3 места (работа, зал…) — на карте зелёным покажем районы,
+              откуда вы успеваете во все из них.
             </div>
-            Добавьте 2–3 места (работа, зал…) — на карте зелёным покажем районы,
-            откуда вы успеваете во все из них.
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full bg-white"
+              onClick={onShowMethodology}
+            >
+              <HelpCircle className="w-4 h-4 mr-2 text-blue-600" />
+              Как это считается
+            </Button>
           </div>
         )}
 

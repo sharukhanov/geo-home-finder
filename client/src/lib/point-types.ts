@@ -32,7 +32,7 @@ export const TRANSPORT_LABELS: Record<string, { emoji: string; label: string }> 
 
 // Short labels for the per-place transport chips.
 export const TRANSPORT_CHOICES = [
-  { value: "public_transport", emoji: "🚇", label: "Транспорт" },
-  { value: "driving", emoji: "🚗", label: "Авто" },
+  { value: "public_transport", emoji: "🚇", label: "Метро, автобус" },
+  { value: "driving", emoji: "🚗", label: "На машине" },
   { value: "walking", emoji: "🚶", label: "Пешком" },
 ] as const;

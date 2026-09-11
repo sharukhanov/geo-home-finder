@@ -24,7 +24,7 @@ import { POINT_TYPES, getPointType, TRANSPORT_CHOICES } from "@/lib/point-types"
 
 const formSchema = insertAttractionPointSchema.extend({
   type: z.enum(["work", "study", "fitness", "hobby", "family", "shopping", "other"]),
-  travelTimeMinutes: z.number().min(10).max(60),
+  travelTimeMinutes: z.number().min(10).max(120),
   arrivalHour: z.number().min(0).max(23),
   transport: z.enum(["public_transport", "driving", "walking"]),
 });
@@ -38,15 +38,11 @@ interface AttractionPointFormProps {
   onAdded: () => void;
 }
 
-const arrivalHourOptions = [
-  { value: 8, label: "08:00 — раннее утро" },
-  { value: 9, label: "09:00 — утро (на работу)" },
-  { value: 10, label: "10:00 — позднее утро" },
-  { value: 13, label: "13:00 — день" },
-  { value: 18, label: "18:00 — вечер (после работы)" },
-  { value: 19, label: "19:00 — вечер" },
-  { value: 21, label: "21:00 — поздний вечер" },
-];
+// Every hour from 07:00 to 23:00.
+const arrivalHourOptions = Array.from({ length: 17 }, (_, i) => {
+  const hour = i + 7;
+  return { value: hour, label: `${String(hour).padStart(2, "0")}:00` };
+});
 
 const DEFAULT_TYPE = "work";
 
@@ -362,14 +358,14 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
                 <Slider
                   value={travelTime}
                   onValueChange={setTravelTime}
-                  max={60}
+                  max={120}
                   min={10}
                   step={5}
                   className="w-full"
                 />
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>10 мин</span>
-                  <span>60 мин</span>
+                  <span>2 часа</span>
                 </div>
               </div>
 

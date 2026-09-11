@@ -7,6 +7,10 @@ export interface IStorage {
   getAttractionPoints(userId: string): Promise<AttractionPoint[]>;
   getAttractionPoint(id: number): Promise<AttractionPoint | undefined>;
   createAttractionPoint(point: InsertAttractionPoint): Promise<AttractionPoint>;
+  updateAttractionPoint(
+    id: number,
+    patch: Partial<InsertAttractionPoint>,
+  ): Promise<AttractionPoint | undefined>;
   deleteAttractionPoint(id: number): Promise<boolean>;
   deleteAttractionPointsForUser(userId: string): Promise<void>;
 
@@ -59,6 +63,17 @@ export class MemStorage implements IStorage {
     };
     this.attractionPoints.set(id, point);
     return point;
+  }
+
+  async updateAttractionPoint(
+    id: number,
+    patch: Partial<InsertAttractionPoint>,
+  ): Promise<AttractionPoint | undefined> {
+    const existing = this.attractionPoints.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...patch };
+    this.attractionPoints.set(id, updated);
+    return updated;
   }
 
   async deleteAttractionPoint(id: number): Promise<boolean> {
@@ -147,6 +162,18 @@ export class DbStorage implements IStorage {
 
   async createAttractionPoint(insertPoint: InsertAttractionPoint): Promise<AttractionPoint> {
     const rows = await db.insert(attractionPoints).values(insertPoint).returning();
+    return rows[0];
+  }
+
+  async updateAttractionPoint(
+    id: number,
+    patch: Partial<InsertAttractionPoint>,
+  ): Promise<AttractionPoint | undefined> {
+    const rows = await db
+      .update(attractionPoints)
+      .set(patch)
+      .where(eq(attractionPoints.id, id))
+      .returning();
     return rows[0];
   }
 
