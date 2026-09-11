@@ -41,12 +41,19 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
     // credit below stays — it is required by the map data licence.
     mapRef.current.attributionControl.setPrefix(false);
 
-    // CARTO Positron: a clean, muted modern basemap. Its light grey palette
-    // keeps the coloured zones readable, unlike the default OSM tiles.
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© OpenStreetMap contributors © CARTO',
-      subdomains: 'abcd',
-      maxZoom: 20,
+    // Basemap. Defaults to OpenStreetMap, which needs no API key; CSS in
+    // index.css desaturates the tiles so the coloured zones stand out.
+    // Set VITE_MAP_TILE_URL (and VITE_MAP_ATTRIBUTION) to switch to a keyed
+    // provider such as CARTO or MapTiler without touching this code.
+    const tileUrl =
+      import.meta.env.VITE_MAP_TILE_URL ||
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+    const tileAttribution =
+      import.meta.env.VITE_MAP_ATTRIBUTION || '© OpenStreetMap contributors';
+
+    L.tileLayer(tileUrl, {
+      attribution: tileAttribution,
+      maxZoom: 19,
     }).addTo(mapRef.current);
 
     return () => {

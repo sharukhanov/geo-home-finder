@@ -66,3 +66,9 @@
 .leaflet-bottom.leaflet-right .leaflet-control-attribution {
   margin-bottom: 0;
 }
+
+/* Mute the basemap so the coloured zones read clearly on top of it.
+   Only the tile pane is filtered — zones, markers and popups are untouched. */
+.leaflet-tile-pane {
+  filter: saturate(0.45) brightness(1.06) contrast(0.92);
+}
