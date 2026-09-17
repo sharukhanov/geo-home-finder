@@ -99,7 +99,10 @@ export default function Home() {
 
   const deletePointMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/attraction-points/${id}`);
+      await apiRequest(
+        "DELETE",
+        `/api/attraction-points/${id}?userId=${encodeURIComponent(userId)}`,
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/attraction-points"] });

@@ -7,6 +7,7 @@ import { computeOptimalArea } from "./isochrone";
 import { routingProvider } from "./providers";
 import { travelTimeMinutes } from "./travel-time";
 import { renderFeedbackPage } from "./feedback-page";
+import rateLimit from "express-rate-limit";
 import { z } from "zod";
 
 // Helper function to calculate distance between two points (Haversine formula)
@@ -191,7 +192,42 @@ function calculateOptimalLivingAreas(points: any[]) {
   return finalAreas;
 }
 
+// Abuse limits. These don't stop a real DDoS (that belongs at the edge), but
+// they keep one client from draining the 2GIS quota or hammering the service.
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Слишком много запросов. Попробуйте через несколько минут." },
+});
+
+// Each of these calls the routing provider once per place — the expensive path.
+const expensiveLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  limit: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Слишком много расчётов подряд. Подождите пару минут." },
+});
+
+const feedbackLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Слишком много отзывов подряд." },
+});
+
+// Keeps one anonymous browser from filling the database.
+const MAX_POINTS_PER_USER = 20;
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  app.use("/api", generalLimiter);
+  app.use("/api/zones/calculate", expensiveLimiter);
+  app.use("/api/check-address", expensiveLimiter);
+  app.use("/api/feedback", feedbackLimiter);
+
   // Get attraction points for a user
   app.get("/api/attraction-points", async (req, res) => {
     try {
@@ -207,6 +243,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/attraction-points", async (req, res) => {
     try {
       const validatedData = insertAttractionPointSchema.parse(req.body);
+
+      const existing = await storage.getAttractionPoints(validatedData.userId);
+      if (existing.length >= MAX_POINTS_PER_USER) {
+        return res.status(400).json({
+          message: `Можно добавить не больше ${MAX_POINTS_PER_USER} мест. Удалите лишние.`,
+        });
+      }
+
       const point = await storage.createAttractionPoint(validatedData);
       res.status(201).json(point);
     } catch (error) {
@@ -224,6 +268,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       if (Number.isNaN(id)) {
         return res.status(400).json({ message: "Invalid id" });
+      }
+
+      // Same ownership rule as delete — ids are sequential and guessable.
+      const userId = String(req.body.userId ?? "");
+      const existing = await storage.getAttractionPoint(id);
+      if (!existing || !userId || existing.userId !== userId) {
+        return res.status(404).json({ message: "Attraction point not found" });
       }
 
       const patchSchema = z.object({
@@ -256,13 +307,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/attraction-points/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const deleted = await storage.deleteAttractionPoint(id);
-      
-      if (deleted) {
-        res.status(204).send();
-      } else {
-        res.status(404).json({ message: "Attraction point not found" });
+      const userId = (req.query.userId as string) || "";
+
+      // Ids are sequential, so a point may only be touched by its owner.
+      // Answer 404 rather than 403 so ids can't be probed for existence.
+      const point = Number.isNaN(id) ? undefined : await storage.getAttractionPoint(id);
+      if (!point || !userId || point.userId !== userId) {
+        return res.status(404).json({ message: "Attraction point not found" });
       }
+
+      await storage.deleteAttractionPoint(id);
+      res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete attraction point" });
     }
