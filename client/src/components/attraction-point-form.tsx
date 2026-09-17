@@ -271,7 +271,7 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
           <div className="relative">
             <FormControl>
               <Input
-                placeholder="Введите адрес или кликните на карте"
+                placeholder="Введите адрес или выберите на карте"
                 value={address}
                 onChange={(e) => handleAddressChange(e.target.value)}
                 onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
