@@ -403,6 +403,9 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
           )}
         </div>
 
+        {/* Pinned to the bottom of the scroll area so the primary action is
+            always in view — on the phone sheet it used to sit below the fold. */}
+        <div className="sticky bottom-0 bg-white pt-3 pb-1 -mb-1 border-t border-slate-100 lg:border-0 lg:pt-0">
         <Button
           type="submit"
           className="w-full"
@@ -410,6 +413,7 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
         >
           {createPointMutation.isPending ? "Добавляем..." : "Добавить место"}
         </Button>
+        </div>
       </form>
     </Form>
   );
