@@ -72,8 +72,9 @@ export function ControlPanel({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Panel Header */}
-      <div className="px-6 py-4 border-b border-slate-100">
+      {/* Panel header. Hidden on the phone sheet, where vertical space is
+          scarce and the onboarding already set the context. */}
+      <div className="hidden lg:block px-6 py-4 border-b border-slate-100">
         <h2 className="text-lg font-semibold text-slate-900">
           Где снять или купить жильё?
         </h2>
