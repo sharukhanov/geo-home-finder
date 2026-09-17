@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
+import { getUserId } from "@/lib/user-id";
 import { useToast } from "@/hooks/use-toast";
 import { POINT_TYPES, TRANSPORT_CHOICES } from "@/lib/point-types";
 import type { AttractionPoint } from "@shared/schema";
@@ -54,6 +55,7 @@ export function EditPointDialog({ point, onClose }: EditPointDialogProps) {
     mutationFn: async () => {
       if (!point) return;
       await apiRequest("PATCH", `/api/attraction-points/${point.id}`, {
+        userId: getUserId(),
         type,
         transport,
         travelTimeMinutes: minutes[0],

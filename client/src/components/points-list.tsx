@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { Trash2, Clock, Pencil } from "lucide-react";
 import { EditPointDialog } from "./edit-point-dialog";
+import { getUserId } from "@/lib/user-id";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { AttractionPoint } from "@shared/schema";
@@ -48,7 +49,10 @@ export function PointsList({ points }: PointsListProps) {
 
   const deletePointMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/attraction-points/${id}`);
+      await apiRequest(
+        "DELETE",
+        `/api/attraction-points/${id}?userId=${encodeURIComponent(getUserId())}`,
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/attraction-points"] });

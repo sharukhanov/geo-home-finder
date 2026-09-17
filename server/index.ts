@@ -4,7 +4,11 @@ import { setupVite, serveStatic, log } from "./vite";
 import { ensureSchema } from "./db";
 
 const app = express();
-app.use(express.json());
+// Railway terminates TLS in front of us, so the client IP arrives in
+// X-Forwarded-For. Without this every visitor looks like the proxy and would
+// share a single rate-limit bucket.
+app.set("trust proxy", 1);
+app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: false }));
 
 app.use((req, res, next) => {
@@ -53,8 +57,13 @@ app.use((req, res, next) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
+    // Log and respond. Re-throwing here used to escape the handler after the
+    // response was already sent, which could take the process down — one bad
+    // request repeated was effectively a self-inflicted outage.
+    console.error("Unhandled request error:", err);
+    if (!res.headersSent) {
+      res.status(status).json({ message });
+    }
   });
 
   // importantly only setup vite in development and after
