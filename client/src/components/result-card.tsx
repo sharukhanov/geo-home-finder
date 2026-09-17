@@ -19,6 +19,32 @@ export function ResultCard({
   approximate = false,
 }: ResultCardProps) {
   const [showDetails, setShowDetails] = useState(false);
+  // On a phone this card covered the map with no way out, so it starts
+  // collapsed to a single line there and expands on tap.
+  const [collapsed, setCollapsed] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 1024,
+  );
+
+  const title = hasOptimal ? "Ищите жильё в зелёной зоне" : "Общей зоны нет";
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setCollapsed(false)}
+        className="absolute bottom-24 left-4 right-4 lg:bottom-4 lg:left-auto lg:right-4 lg:max-w-xs z-20 flex items-center gap-2 rounded-lg bg-white shadow-lg px-3 py-2 text-left"
+      >
+        <span
+          className={
+            "w-3 h-3 rounded-sm flex-none " +
+            (hasOptimal ? "bg-emerald-500" : "border border-blue-500 bg-blue-100")
+          }
+        />
+        <span className="font-medium text-slate-900 text-sm truncate flex-1">{title}</span>
+        <ChevronUp className="w-4 h-4 text-slate-400 flex-none" />
+      </button>
+    );
+  }
 
   return (
     // Sits above the phone's bottom bar; back to the corner from lg up.
@@ -28,7 +54,7 @@ export function ResultCard({
           <>
             <div className="flex items-start gap-2">
               <div className="w-3 h-3 bg-emerald-500 rounded-sm mt-1 flex-none" />
-              <div>
+              <div className="flex-1">
                 <div className="font-medium text-slate-900 text-sm">
                   Ищите жильё в зелёной зоне
                 </div>
@@ -36,6 +62,14 @@ export function ResultCard({
                   Отсюда вы успеваете во все свои места вовремя.
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setCollapsed(true)}
+                aria-label="Свернуть"
+                className="p-1 -mt-1 -mr-1 text-slate-400 hover:text-slate-600 flex-none"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
             </div>
 
             {districts.length > 0 && (
@@ -48,13 +82,21 @@ export function ResultCard({
         ) : (
           <div className="flex items-start gap-2">
             <div className="w-3 h-3 border border-blue-500 bg-blue-100 rounded-sm mt-1 flex-none" />
-            <div>
+            <div className="flex-1">
               <div className="font-medium text-slate-900 text-sm">Общей зоны нет</div>
               <div className="text-xs text-slate-600 mt-0.5">
                 До всех мест не успеть за заданное время. Синим — куда успеваете
                 от каждого места отдельно. Увеличьте время или выберите места ближе.
               </div>
             </div>
+            <button
+              type="button"
+              onClick={() => setCollapsed(true)}
+              aria-label="Свернуть"
+              className="p-1 -mt-1 -mr-1 text-slate-400 hover:text-slate-600 flex-none"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
           </div>
         )}
 
