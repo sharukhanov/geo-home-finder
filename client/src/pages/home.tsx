@@ -139,11 +139,6 @@ export default function Home() {
 
   const closeOnboarding = useCallback(() => {
     setShowOnboarding(false);
-    // On phones the map alone gives no hint where to start, so reveal the
-    // panel with the form right after the explainer.
-    if (typeof window !== "undefined" && window.innerWidth < 1024) {
-      setIsPanelOpen(true);
-    }
     try {
       localStorage.setItem("fatera-onboarded", "1");
     } catch {
@@ -178,15 +173,6 @@ export default function Home() {
                 <><PanelLeftClose className="w-4 h-4 mr-2" />Скрыть панель</>
               )}
             </Button>
-            {/* Labelled so it's obvious this is where you start on a phone. */}
-            <Button
-              size="sm"
-              onClick={() => setIsPanelOpen(!isPanelOpen)}
-              className="lg:hidden"
-            >
-              <Menu className="w-4 h-4 mr-2" />
-              {isPanelOpen ? "Скрыть" : "Мои места"}
-            </Button>
           </div>
         </div>
       </header>
@@ -203,23 +189,54 @@ export default function Home() {
         className="absolute inset-0 z-0"
       />
 
-      {/* Control Panel */}
+      {/* Control panel: a bottom sheet on phones (the map stays visible above
+          it), a left sidebar from lg up. */}
       <div
         className={cn(
-          "absolute top-16 left-0 bottom-0 w-full lg:w-96 bg-white z-30 transition-transform duration-300 ease-in-out shadow-xl lg:shadow-lg border-r border-slate-200",
-          isPanelOpen ? "translate-x-0" : "-translate-x-full",
+          "absolute z-30 bg-white transition-transform duration-300 ease-in-out flex flex-col",
+          // phone: sheet anchored to the bottom, map visible above
+          "inset-x-0 bottom-0 h-[72dvh] rounded-t-2xl shadow-2xl",
+          isPanelOpen ? "translate-y-0" : "translate-y-full",
+          // desktop: full-height sidebar on the left
+          "lg:inset-x-auto lg:top-16 lg:left-0 lg:bottom-0 lg:h-auto lg:w-96",
+          "lg:rounded-none lg:shadow-lg lg:border-r lg:border-slate-200 lg:translate-y-0",
           isPanelCollapsed ? "lg:-translate-x-full" : "lg:translate-x-0"
         )}
       >
-        <ControlPanel
-          attractionPoints={attractionPoints}
-          selectedPoint={selectedPoint}
-          onClearSelectedPoint={() => setSelectedPoint(null)}
-          onPointSelected={(lat, lng) => setSelectedPoint({ lat, lng })}
-          onReset={clearResults}
-          onShowMethodology={() => setShowMethodology(true)}
-        />
+        {/* Grab handle — signals the sheet can be dismissed. */}
+        <button
+          type="button"
+          onClick={() => setIsPanelOpen(false)}
+          aria-label="Свернуть панель"
+          className="lg:hidden w-full pt-2 pb-1 flex justify-center flex-none"
+        >
+          <span className="h-1.5 w-10 rounded-full bg-slate-300" />
+        </button>
+
+        <div className="flex-1 min-h-0">
+          <ControlPanel
+            attractionPoints={attractionPoints}
+            selectedPoint={selectedPoint}
+            onClearSelectedPoint={() => setSelectedPoint(null)}
+            onPointSelected={(lat, lng) => setSelectedPoint({ lat, lng })}
+            onReset={clearResults}
+            onShowMethodology={() => setShowMethodology(true)}
+          />
+        </div>
       </div>
+
+      {/* Phone: a permanent bar is the way in, so the map is never covered
+          until the user asks for the sheet. */}
+      {!isPanelOpen && (
+        <div className="lg:hidden absolute bottom-0 inset-x-0 z-30 p-3 bg-gradient-to-t from-white via-white/90 to-transparent pt-8">
+          <Button className="w-full" size="lg" onClick={() => setIsPanelOpen(true)}>
+            <Menu className="w-5 h-5 mr-2" />
+            {attractionPoints.length > 0
+              ? `Мои места (${attractionPoints.length})`
+              : "Добавить место"}
+          </Button>
+        </div>
+      )}
 
       {/* Mobile Overlay */}
       {isPanelOpen && (
