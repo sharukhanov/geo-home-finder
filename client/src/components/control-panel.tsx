@@ -44,7 +44,9 @@ export function ControlPanel({
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const formVisible = !hasPoints || showForm;
+  // A pending map selection always opens the form — otherwise the picked
+  // address would land in a collapsed form the user can't see.
+  const formVisible = !hasPoints || showForm || selectedPoint !== null;
 
   const resetMutation = useMutation({
     mutationFn: async () => {

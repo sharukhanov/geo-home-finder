@@ -132,10 +132,18 @@ export default function Home() {
 
   const handleMapClick = useCallback((lat: number, lng: number) => {
     setSelectedPoint({ lat, lng });
+    // On phones the form lives in a hidden drawer, so tapping the map looked
+    // like nothing happened. Open it so the picked address is visible.
+    setIsPanelOpen(true);
   }, []);
 
   const closeOnboarding = useCallback(() => {
     setShowOnboarding(false);
+    // On phones the map alone gives no hint where to start, so reveal the
+    // panel with the form right after the explainer.
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setIsPanelOpen(true);
+    }
     try {
       localStorage.setItem("fatera-onboarded", "1");
     } catch {
@@ -170,13 +178,14 @@ export default function Home() {
                 <><PanelLeftClose className="w-4 h-4 mr-2" />Скрыть панель</>
               )}
             </Button>
+            {/* Labelled so it's obvious this is where you start on a phone. */}
             <Button
-              variant="outline"
               size="sm"
               onClick={() => setIsPanelOpen(!isPanelOpen)}
               className="lg:hidden"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-4 h-4 mr-2" />
+              {isPanelOpen ? "Скрыть" : "Мои места"}
             </Button>
           </div>
         </div>
