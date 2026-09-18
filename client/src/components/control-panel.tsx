@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AttractionPointForm } from "./attraction-point-form";
+import { AttractionPointForm, FORM_ID } from "./attraction-point-form";
 import { AddressCheck } from "./address-check";
 import { PointsList } from "./points-list";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,7 @@ export function ControlPanel({
   const hasPoints = attractionPoints.length > 0;
   // Once the user has places, the form collapses into a single button.
   const [showForm, setShowForm] = useState(false);
+  const [addPending, setAddPending] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -86,7 +87,6 @@ export function ControlPanel({
       {/* Scrollable Content */}
       <div
         className="flex-1 overflow-y-auto px-6 py-4 space-y-4"
-        style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
       >
         {/* Hint for first-time users, with the single explainer entry point. */}
         {!hasPoints && (
@@ -113,6 +113,7 @@ export function ControlPanel({
             onClearSelectedPoint={onClearSelectedPoint}
             onPointSelected={onPointSelected}
             onAdded={() => setShowForm(false)}
+            onPendingChange={setAddPending}
           />
         ) : (
           <Button
@@ -142,9 +143,25 @@ export function ControlPanel({
         )}
       </div>
 
-      {/* Reset */}
-      {hasPoints && (
-        <div className="px-6 py-4 border-t border-slate-100">
+      {/* Footer: always outside the scroll area, so the primary action can
+          never be scrolled out of view. */}
+      {(formVisible || hasPoints) && (
+        <div
+          className="px-6 pt-3 border-t border-slate-100 bg-white space-y-2 flex-none"
+          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+        >
+          {formVisible && (
+            <Button
+              type="submit"
+              form={FORM_ID}
+              disabled={addPending}
+              className="w-full h-12 text-base rounded-2xl"
+            >
+              {addPending ? "Добавляем…" : "Добавить место"}
+            </Button>
+          )}
+
+          {hasPoints && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
@@ -176,6 +193,7 @@ export function ControlPanel({
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          )}
         </div>
       )}
     </div>
