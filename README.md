@@ -94,15 +94,19 @@ shared/   — общая схема данных (Drizzle + Zod)
    Yandex Cloud, Reg.ru). Это надёжный вариант: пользователи сервиса —
    москвичи, и сайт должен открываться у них без VPN.
 
-Код к переезду готов: в корне лежит `Dockerfile`, который собирает и запускает
-приложение одной командой. Любой из перечисленных хостингов умеет разворачивать
-проект из GitHub по `Dockerfile`. Нужны те же переменные окружения, что и на
-Railway, плюс `DATABASE_URL` от их managed PostgreSQL.
+Код к переезду готов: `deploy/Dockerfile` собирает и запускает приложение одной
+командой. Любой из перечисленных хостингов умеет разворачивать проект из GitHub
+по `Dockerfile` — при подключении нужно указать путь `deploy/Dockerfile`. Нужны
+те же переменные окружения, что и на Railway, плюс `DATABASE_URL` от их managed
+PostgreSQL.
 
 ```bash
-docker build -t fatera .
+docker build -f deploy/Dockerfile -t fatera .
 docker run -p 5000:5000 --env-file .env fatera
 ```
+
+> Файл лежит в `deploy/`, а не в корне, намеренно: Railway предпочитает
+> корневой `Dockerfile` своему сборщику, и это уже один раз уронило продакшен.
 
 > Для продакшена рекомендуется вынести геокодинг на self-hosted Nominatim или
 > платного провайдера (`GEOCODER_BASE_URL`), т.к. у публичного Nominatim строгие
