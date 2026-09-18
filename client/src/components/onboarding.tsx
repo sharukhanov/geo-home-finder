@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 interface OnboardingProps {
   open: boolean;
@@ -32,9 +32,11 @@ export function Onboarding({ open, onClose, onShowMethodology }: OnboardingProps
       <DialogContent className="max-w-lg p-0 max-h-[90vh] overflow-y-auto">
         <div className="px-6 pt-8 pb-6 text-center">
           <div className="text-5xl mb-3">🏡</div>
-          <h2 className="text-2xl font-bold text-slate-900">
+          {/* The heading doubles as the dialog's accessible name, so screen
+              readers announce what just opened instead of "dialog". */}
+          <DialogTitle className="text-2xl font-bold text-slate-900">
             Где снять или купить жильё?
-          </h2>
+          </DialogTitle>
           <p className="text-slate-600 mt-2">
             Fatera подскажет районы, из которых вам будет удобно добираться
             до всех важных для вас мест.

@@ -50,10 +50,25 @@ export const insertFeedbackSchema = createInsertSchema(feedback).omit({
 export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
 export type Feedback = typeof feedback.$inferSelect;
 
-export const insertAttractionPointSchema = createInsertSchema(attractionPoints).omit({
-  id: true,
-  createdAt: true,
-});
+export const TRANSPORT_MODES = ["public_transport", "driving", "walking"] as const;
+
+// The generated schema only mirrors the column types, so it happily accepted a
+// place at latitude 9999 with a 999999-minute limit and a 50KB address. Those
+// values reach the routing provider and the map, so they are bounded here —
+// matching the limits the PATCH route already enforced.
+export const insertAttractionPointSchema = createInsertSchema(attractionPoints)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    userId: z.string().min(1).max(64),
+    type: z.string().min(1).max(32),
+    name: z.string().min(1).max(120),
+    address: z.string().min(1).max(500),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    travelTimeMinutes: z.number().int().min(5).max(180),
+    arrivalHour: z.number().int().min(0).max(23).default(9),
+    transport: z.enum(TRANSPORT_MODES).default("public_transport"),
+  });
 
 export const insertZoneSchema = createInsertSchema(zones).omit({
   id: true,

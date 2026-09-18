@@ -71,6 +71,10 @@ function nextWeekdayStartTime(hourMsk: number): string {
   return d.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
+// Without a deadline a hung upstream holds the request open indefinitely: the
+// user watches a spinner forever and the connections pile up on our side.
+const REQUEST_TIMEOUT_MS = 12_000;
+
 async function postJson(url: string, body: unknown): Promise<any | null> {
   const key = apiKey();
   if (!key) return null;
@@ -79,6 +83,7 @@ async function postJson(url: string, body: unknown): Promise<any | null> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -111,7 +116,7 @@ async function getItems(
     url.searchParams.set(k, v);
   }
 
-  const response = await fetch(url);
+  const response = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   if (!response.ok) {
     // 404 simply means "nothing found" for these endpoints.
     if (response.status !== 404) {

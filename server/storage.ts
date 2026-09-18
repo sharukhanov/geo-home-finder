@@ -21,6 +21,7 @@ export interface IStorage {
 
   // Feedback
   createFeedback(entry: InsertFeedback): Promise<Feedback>;
+  getFeedback(id: number): Promise<Feedback | undefined>;
   addFeedbackComment(id: number, comment: string): Promise<boolean>;
   listFeedback(limit: number): Promise<Feedback[]>;
 }
@@ -129,6 +130,10 @@ export class MemStorage implements IStorage {
     return saved;
   }
 
+  async getFeedback(id: number): Promise<Feedback | undefined> {
+    return this.feedback.get(id);
+  }
+
   async addFeedbackComment(id: number, comment: string): Promise<boolean> {
     const existing = this.feedback.get(id);
     if (!existing) return false;
@@ -207,6 +212,11 @@ export class DbStorage implements IStorage {
 
   async createFeedback(entry: InsertFeedback): Promise<Feedback> {
     const rows = await db.insert(feedback).values(entry).returning();
+    return rows[0];
+  }
+
+  async getFeedback(id: number): Promise<Feedback | undefined> {
+    const rows = await db.select().from(feedback).where(eq(feedback.id, id)).limit(1);
     return rows[0];
   }
 

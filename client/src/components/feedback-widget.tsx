@@ -39,7 +39,10 @@ export function FeedbackWidget({ context }: FeedbackWidgetProps) {
       return;
     }
     try {
-      await apiRequest("PATCH", `/api/feedback/${feedbackId}`, { comment });
+      await apiRequest("PATCH", `/api/feedback/${feedbackId}`, {
+        comment,
+        userId: getUserId(),
+      });
     } catch {
       // ignore
     }

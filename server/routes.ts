@@ -44,7 +44,9 @@ function calculateOptimalLivingAreas(points: any[]) {
     // If the farthest points are more than 3x the average allowed travel distance
     const maxAllowedDistance = avgTravelTime * 300 * 3; // 300m/min * 3 for margin
     if (maxDistance > maxAllowedDistance) {
-      console.log(`Points too far apart: max distance ${(maxDistance/1000).toFixed(1)}km, allowed ${(maxAllowedDistance/1000).toFixed(1)}km`);
+      console.warn(
+        `Points too far apart: ${(maxDistance / 1000).toFixed(1)}km vs allowed ${(maxAllowedDistance / 1000).toFixed(1)}km`,
+      );
     }
   }
   
@@ -130,11 +132,6 @@ function calculateOptimalLivingAreas(points: any[]) {
           radius = 600;
         }
         
-        // Debug: log some examples
-        if (optimalAreas.length < 10) {
-          console.log(`Point ${lat.toFixed(4)}, ${lng.toFixed(4)}: worstTimeRatio=${worstTimeRatio.toFixed(3)}, type=${type}`);
-        }
-
         optimalAreas.push({
           lat,
           lng,
@@ -186,9 +183,6 @@ function calculateOptimalLivingAreas(points: any[]) {
   addAreasOfType(goodAreas, 7);
   addAreasOfType(farAreas, 3);
   
-  console.log(`Generated zones: ${idealAreas.length} ideal, ${goodAreas.length} good, ${farAreas.length} far`);
-  console.log(`Final zones: ${finalAreas.filter(a => a.type === 'ideal').length} ideal, ${finalAreas.filter(a => a.type === 'good').length} good, ${finalAreas.filter(a => a.type === 'far').length} far`);
-
   return finalAreas;
 }
 
@@ -434,6 +428,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (Number.isNaN(id) || !comment.trim()) {
         return res.status(400).json({ message: "Invalid comment" });
       }
+
+      // Feedback ids are sequential, so without this anyone could attach a
+      // comment to somebody else's rating. 404 rather than 403, so ids can't
+      // be probed for existence.
+      const userId = String(req.body.userId ?? "");
+      const existing = await storage.getFeedback(id);
+      if (!existing || !userId || existing.userId !== userId) {
+        return res.status(404).json({ message: "Feedback not found" });
+      }
+
       const updated = await storage.addFeedbackComment(id, comment);
       if (!updated) return res.status(404).json({ message: "Feedback not found" });
       res.status(204).send();

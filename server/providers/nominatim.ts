@@ -29,7 +29,11 @@ async function request(path: string, params: Record<string, string>) {
     url.searchParams.set(key, value);
   }
 
-  const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+  const response = await fetch(url, {
+    headers: { "User-Agent": USER_AGENT },
+    // The public instance can be slow; don't let it hold our request open.
+    signal: AbortSignal.timeout(12_000),
+  });
   if (!response.ok) {
     throw new Error(`Nominatim responded with ${response.status}`);
   }
