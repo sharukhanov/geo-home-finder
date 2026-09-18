@@ -83,8 +83,9 @@ body,
 #root {
   height: 100%;
   /* Dynamic viewport height: excludes the browser's own bars, so nothing is
-     laid out underneath Safari's bottom toolbar. */
-  height: 100dvh;
+     laid out underneath Safari's bottom toolbar. `--app-h` is the measured
+     visible height (see lib/app-height.ts) and wins where iOS gets dvh wrong. */
+  height: var(--app-h, 100dvh);
   overflow: hidden;
   /* no pull-to-refresh, no bounce on the page itself */
   overscroll-behavior: none;
