@@ -11,6 +11,19 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: false }));
 
+// Baseline hardening. Cheap, and it closes the obvious browser-side attacks:
+// framing the site to trick a click, and browsers guessing content types.
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "geolocation=(self), microphone=(), camera=()");
+  next();
+});
+
+// Somewhere for the host to check the service is alive without a full page load.
+app.get("/healthz", (_req, res) => res.json({ ok: true }));
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -47,8 +60,17 @@ app.use((req, res, next) => {
       await ensureSchema();
       log("database schema ready");
     } catch (err) {
-      log(`failed to initialize database schema: ${err}`);
+      console.error(
+        "!!! DATABASE SCHEMA INIT FAILED — the app is running but every save will fail:",
+        err,
+      );
     }
+  } else {
+    // Silently serving from memory looks fine until a restart wipes everyone's
+    // places, so say it loudly rather than in passing.
+    console.warn(
+      "!!! DATABASE_URL is not set — storing data IN MEMORY. Everything is lost on restart.",
+    );
   }
 
   const server = await registerRoutes(app);

@@ -23,6 +23,13 @@ export function getUserId(): string {
     }
     return id;
   } catch {
-    return "default-user";
+    // localStorage can throw (Safari private mode, blocked site data). A shared
+    // constant here would put every such visitor in the same bucket, showing
+    // them each other's places — so fall back to a per-tab random id instead.
+    // Their data simply won't survive a reload.
+    if (!sessionId) sessionId = generateId();
+    return sessionId;
   }
 }
+
+let sessionId: string | null = null;
