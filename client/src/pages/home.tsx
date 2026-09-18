@@ -149,7 +149,7 @@ export default function Home() {
   const hasResults = useIsochrones ? isochrones.length > 0 : zones.length > 0;
 
   return (
-    <div className="relative h-screen h-[100dvh] w-full overflow-hidden">
+    <div className="relative h-[var(--app-h,100dvh)] w-full overflow-hidden">
       {/* Header */}
       <header className="absolute top-0 left-0 right-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/60">
         <div className="px-4 py-3 flex items-center justify-between">
@@ -195,7 +195,8 @@ export default function Home() {
         className={cn(
           "absolute z-30 bg-white transition-transform duration-300 ease-in-out flex flex-col",
           // phone: sheet anchored to the bottom, map visible above
-          "inset-x-0 bottom-0 h-[72dvh] rounded-t-[1.75rem] shadow-[0_-8px_40px_rgba(0,0,0,0.12)]",
+          "inset-x-0 bottom-0 h-[calc(var(--app-h,100dvh)*0.72)]",
+          "rounded-t-[1.75rem] shadow-[0_-8px_40px_rgba(0,0,0,0.12)]",
           isPanelOpen ? "translate-y-0" : "translate-y-full",
           // desktop: full-height sidebar on the left
           "lg:inset-x-auto lg:top-16 lg:left-0 lg:bottom-0 lg:h-auto lg:w-96",
