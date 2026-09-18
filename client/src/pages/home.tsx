@@ -151,7 +151,7 @@ export default function Home() {
   return (
     <div className="relative h-screen h-[100dvh] w-full overflow-hidden">
       {/* Header */}
-      <header className="absolute top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-sm border-b border-slate-200">
+      <header className="absolute top-0 left-0 right-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/60">
         <div className="px-4 py-3 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
@@ -195,7 +195,7 @@ export default function Home() {
         className={cn(
           "absolute z-30 bg-white transition-transform duration-300 ease-in-out flex flex-col",
           // phone: sheet anchored to the bottom, map visible above
-          "inset-x-0 bottom-0 h-[72dvh] rounded-t-2xl shadow-2xl",
+          "inset-x-0 bottom-0 h-[72dvh] rounded-t-[1.75rem] shadow-[0_-8px_40px_rgba(0,0,0,0.12)]",
           isPanelOpen ? "translate-y-0" : "translate-y-full",
           // desktop: full-height sidebar on the left
           "lg:inset-x-auto lg:top-16 lg:left-0 lg:bottom-0 lg:h-auto lg:w-96",
@@ -228,8 +228,14 @@ export default function Home() {
       {/* Phone: a permanent bar is the way in, so the map is never covered
           until the user asks for the sheet. */}
       {!isPanelOpen && (
-        <div className="lg:hidden absolute bottom-0 inset-x-0 z-30 p-3 bg-gradient-to-t from-white via-white/90 to-transparent pt-8">
-          <Button className="w-full" size="lg" onClick={() => setIsPanelOpen(true)}>
+        <div
+          className="lg:hidden absolute bottom-0 inset-x-0 z-30 px-4 pt-8 bg-gradient-to-t from-white via-white/90 to-transparent"
+          style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        >
+          <Button
+            className="w-full h-12 text-base rounded-2xl shadow-lg"
+            onClick={() => setIsPanelOpen(true)}
+          >
             <Menu className="w-5 h-5 mr-2" />
             {attractionPoints.length > 0
               ? `Мои места (${attractionPoints.length})`

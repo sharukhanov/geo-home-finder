@@ -84,7 +84,10 @@ export function ControlPanel({
       </div>
 
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+      <div
+        className="flex-1 overflow-y-auto px-6 py-4 space-y-4"
+        style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+      >
         {/* Hint for first-time users, with the single explainer entry point. */}
         {!hasPoints && (
           <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-slate-700 space-y-2">

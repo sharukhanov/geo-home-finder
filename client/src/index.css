@@ -13,7 +13,7 @@
   --card-foreground: hsl(20, 14.3%, 4.1%);
   --border: hsl(20, 5.9%, 90%);
   --input: hsl(20, 5.9%, 90%);
-  --primary: hsl(207, 90%, 54%);
+  --primary: hsl(211, 100%, 50%);
   --primary-foreground: hsl(211, 100%, 99%);
   --secondary: hsl(60, 4.8%, 95.9%);
   --secondary-foreground: hsl(24, 9.8%, 10%);
@@ -21,8 +21,9 @@
   --accent-foreground: hsl(24, 9.8%, 10%);
   --destructive: hsl(0, 84.2%, 60.2%);
   --destructive-foreground: hsl(60, 9.1%, 97.8%);
-  --ring: hsl(20, 14.3%, 4.1%);
-  --radius: 0.5rem;
+  --ring: hsl(211, 100%, 50%);
+  /* iOS uses generous corner radii. */
+  --radius: 0.875rem;
 }
 
 .dark {
@@ -36,7 +37,7 @@
   --card-foreground: hsl(0, 0%, 98%);
   --border: hsl(240, 3.7%, 15.9%);
   --input: hsl(240, 3.7%, 15.9%);
-  --primary: hsl(207, 90%, 54%);
+  --primary: hsl(211, 100%, 50%);
   --primary-foreground: hsl(211, 100%, 99%);
   --secondary: hsl(240, 3.7%, 15.9%);
   --secondary-foreground: hsl(0, 0%, 98%);
@@ -71,4 +72,58 @@
    Only the tile pane is filtered — zones, markers and popups are untouched. */
 .leaflet-tile-pane {
   filter: saturate(0.45) brightness(1.06) contrast(0.92);
+}
+
+/* ---- Mobile scrolling ----------------------------------------------------
+   The app is a fixed-viewport map, not a document. Without this the page
+   itself dragged and rubber-banded under the finger while the user was
+   trying to scroll a panel. */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+  /* no pull-to-refresh, no bounce on the page itself */
+  overscroll-behavior: none;
+}
+
+body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+}
+
+/* Scrollable areas keep the gesture to themselves instead of handing it
+   back to the page when they hit their end. */
+.overflow-y-auto,
+.overflow-auto {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---- iOS-flavoured surface ----------------------------------------------- */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Quieter scrollbars on desktop, invisible on touch as on iOS. */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Don't let a double-tap zoom the interface while tapping controls. */
+button,
+[role="button"],
+a {
+  touch-action: manipulation;
 }
