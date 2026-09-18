@@ -75,7 +75,11 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
     defaultValues: {
       userId: getUserId(),
       type: DEFAULT_TYPE,
-      name: "",
+      // There is no name field in the UI — the name is the type's label. It is
+      // kept in sync here rather than filled in at submit time, because an
+      // empty value fails validation and react-hook-form then refuses to
+      // submit without ever reaching the submit handler.
+      name: getPointType(DEFAULT_TYPE).name,
       address: "",
       latitude: 55.7558,
       longitude: 37.6176,
@@ -189,6 +193,7 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
   const handleTypeChange = (value: string) => {
     form.setValue("type", value as FormData["type"]);
     const info = getPointType(value);
+    form.setValue("name", info.name);
     setTravelTime([info.defaultMinutes]);
     form.setValue("arrivalHour", info.defaultArrivalHour);
   };
