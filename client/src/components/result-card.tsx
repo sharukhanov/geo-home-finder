@@ -32,7 +32,7 @@ export function ResultCard({
       <button
         type="button"
         onClick={() => setCollapsed(false)}
-        className="absolute bottom-24 left-4 right-4 lg:bottom-4 lg:left-auto lg:right-4 lg:max-w-xs z-20 flex items-center gap-2 rounded-lg bg-white shadow-lg px-3 py-2 text-left"
+        className="absolute bottom-28 left-4 right-4 lg:bottom-4 lg:left-auto lg:right-4 lg:max-w-xs z-20 flex items-center gap-2 rounded-2xl bg-white/90 backdrop-blur-xl shadow-lg px-4 py-3 text-left"
       >
         <span
           className={
@@ -48,7 +48,7 @@ export function ResultCard({
 
   return (
     // Sits above the phone's bottom bar; back to the corner from lg up.
-    <Card className="absolute bottom-24 left-4 right-4 lg:bottom-4 lg:left-auto lg:right-4 lg:max-w-xs z-20 bg-white shadow-lg animate-in slide-in-from-bottom-2 duration-300 max-h-[40vh] overflow-y-auto">
+    <Card className="absolute bottom-28 left-4 right-4 lg:bottom-4 lg:left-auto lg:right-4 lg:max-w-xs z-20 rounded-2xl bg-white/95 backdrop-blur-xl border-slate-200/70 shadow-xl animate-in slide-in-from-bottom-2 duration-300 max-h-[40vh] overflow-y-auto">
       <CardContent className="p-4 space-y-2">
         {hasOptimal ? (
           <>
