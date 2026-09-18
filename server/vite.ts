@@ -76,10 +76,19 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  app.use(express.static(distPath, { index: false }));
 
-  // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+  // Social crawlers ignore a relative og:image, and the deployed hostname is
+  // not known at build time (it has already changed once), so the absolute URL
+  // is filled in per request from the host we were actually reached on.
+  const template = fs.readFileSync(path.resolve(distPath, "index.html"), "utf-8");
+
+  app.use("*", (req, res) => {
+    const proto = req.protocol === "https" ? "https" : "http";
+    const host = req.get("host");
+    const html = host
+      ? template.replaceAll('content="/og.png"', `content="${proto}://${host}/og.png"`)
+      : template;
+    res.type("html").send(html);
   });
 }

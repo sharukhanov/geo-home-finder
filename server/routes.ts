@@ -7,7 +7,8 @@ import { computeOptimalArea } from "./isochrone";
 import { routingProvider } from "./providers";
 import { travelTimeMinutes } from "./travel-time";
 import { renderFeedbackPage } from "./feedback-page";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import type { Request } from "express";
 import { z } from "zod";
 
 // Helper function to calculate distance between two points (Haversine formula)
@@ -188,21 +189,59 @@ function calculateOptimalLivingAreas(points: any[]) {
 
 // Abuse limits. These don't stop a real DDoS (that belongs at the edge), but
 // they keep one client from draining the 2GIS quota or hammering the service.
+//
+// Counting per IP alone is wrong for our audience: Russian mobile carriers put
+// thousands of subscribers behind a handful of addresses, so a link shared on
+// social media would have arrivals locking each other out. Count per anonymous
+// browser id instead, and keep a much higher per-IP ceiling as the backstop
+// against a single scripted host.
+function clientKey(req: Request): string {
+  const body = req.body as { userId?: unknown } | undefined;
+  const fromBody = typeof body?.userId === "string" ? body.userId : "";
+  const fromQuery = typeof req.query.userId === "string" ? req.query.userId : "";
+  const id = (fromBody || fromQuery).slice(0, 64);
+  // ipKeyGenerator normalises IPv6 so a client can't cycle through a /64.
+  return id ? `u:${id}` : `ip:${ipKeyGenerator(req.ip ?? "")}`;
+}
+
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 600,
+  keyGenerator: clientKey,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Слишком много запросов. Попробуйте через несколько минут." },
+});
+
+// Per-address ceiling. Set well above what a shared mobile network produces,
+// but low enough to stop one machine hammering us.
+const perIpCeiling = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 6000,
+  keyGenerator: (req: Request) => ipKeyGenerator(req.ip ?? ""),
+  standardHeaders: false,
+  legacyHeaders: false,
+  message: { message: "Слишком много запросов с этого адреса." },
 });
 
 // Each of these calls the routing provider once per place — the expensive path.
 const expensiveLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   limit: 40,
+  keyGenerator: clientKey,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Слишком много расчётов подряд. Подождите пару минут." },
+});
+
+// Protects the 2GIS quota from one host, without punishing a shared carrier.
+const expensivePerIpCeiling = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  limit: 400,
+  keyGenerator: (req: Request) => ipKeyGenerator(req.ip ?? ""),
+  standardHeaders: false,
+  legacyHeaders: false,
+  message: { message: "Слишком много расчётов с этого адреса." },
 });
 
 const feedbackLimiter = rateLimit({
@@ -217,9 +256,9 @@ const feedbackLimiter = rateLimit({
 const MAX_POINTS_PER_USER = 20;
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  app.use("/api", generalLimiter);
-  app.use("/api/zones/calculate", expensiveLimiter);
-  app.use("/api/check-address", expensiveLimiter);
+  app.use("/api", perIpCeiling, generalLimiter);
+  app.use("/api/zones/calculate", expensivePerIpCeiling, expensiveLimiter);
+  app.use("/api/check-address", expensivePerIpCeiling, expensiveLimiter);
   app.use("/api/feedback", feedbackLimiter);
 
   // Get attraction points for a user
