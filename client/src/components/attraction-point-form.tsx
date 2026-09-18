@@ -31,11 +31,18 @@ const formSchema = insertAttractionPointSchema.extend({
 
 type FormData = z.infer<typeof formSchema>;
 
+// The submit button is rendered by ControlPanel in the panel footer (outside
+// the scroll area, so it can never be scrolled out of view) and linked to this
+// form by id.
+export const FORM_ID = "add-place-form";
+
 interface AttractionPointFormProps {
   selectedPoint: {lat: number, lng: number} | null;
   onClearSelectedPoint: () => void;
   onPointSelected: (lat: number, lng: number) => void;
   onAdded: () => void;
+  /** Lets the footer button reflect the in-flight state. */
+  onPendingChange?: (pending: boolean) => void;
 }
 
 // Every hour from 07:00 to 23:00.
@@ -46,7 +53,7 @@ const arrivalHourOptions = Array.from({ length: 17 }, (_, i) => {
 
 const DEFAULT_TYPE = "work";
 
-export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPointSelected, onAdded }: AttractionPointFormProps) {
+export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPointSelected, onAdded, onPendingChange }: AttractionPointFormProps) {
   const [travelTime, setTravelTime] = useState([getPointType(DEFAULT_TYPE).defaultMinutes]);
   const [address, setAddress] = useState("");
   const [suggestions, setSuggestions] = useState<GeocodeResult[]>([]);
@@ -109,6 +116,11 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
       });
     },
   });
+
+  // Keep the footer button's label in sync with the request.
+  useEffect(() => {
+    onPendingChange?.(createPointMutation.isPending);
+  }, [createPointMutation.isPending]);
 
   // Reverse-geocode the coordinates when a point is picked on the map.
   useEffect(() => {
@@ -236,7 +248,11 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form
+        id={FORM_ID}
+        onSubmit={form.handleSubmit(onSubmit)}
+        className="space-y-4"
+      >
         <FormField
           control={form.control}
           name="type"
@@ -403,17 +419,8 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
           )}
         </div>
 
-        {/* Pinned to the bottom of the scroll area so the primary action is
-            always in view — on the phone sheet it used to sit below the fold. */}
-        <div className="sticky bottom-0 bg-white pt-3 pb-1 -mb-1 border-t border-slate-100 lg:border-0 lg:pt-0">
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={createPointMutation.isPending}
-        >
-          {createPointMutation.isPending ? "Добавляем..." : "Добавить место"}
-        </Button>
-        </div>
+        {/* The submit button lives in the panel footer, outside this scroll
+            area — see ControlPanel. It targets this form by id. */}
       </form>
     </Form>
   );
