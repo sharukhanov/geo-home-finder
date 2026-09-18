@@ -1,9 +1,22 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
+// Leaflet finds its default marker images by guessing a path from the URL its
+// stylesheet was loaded from. That guess only works for a CDN copy; now that
+// the stylesheet is bundled, the images have to be wired up explicitly or the
+// markers render as broken images.
+import markerIconUrl from "leaflet/dist/images/marker-icon.png";
+import markerIconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png";
+import markerShadowUrl from "leaflet/dist/images/marker-shadow.png";
 import type { MultiPolygon } from "geojson";
 import type { AttractionPoint, Zone } from "@shared/schema";
 import type { IsochroneFeature } from "@/lib/geo-types";
 import { cn } from "@/lib/utils";
+
+L.Icon.Default.mergeOptions({
+  iconUrl: markerIconUrl,
+  iconRetinaUrl: markerIconRetinaUrl,
+  shadowUrl: markerShadowUrl,
+});
 
 interface MapContainerProps {
   attractionPoints: AttractionPoint[];
