@@ -82,15 +82,12 @@ html,
 body,
 #root {
   height: 100%;
+  /* Dynamic viewport height: excludes the browser's own bars, so nothing is
+     laid out underneath Safari's bottom toolbar. */
+  height: 100dvh;
   overflow: hidden;
   /* no pull-to-refresh, no bounce on the page itself */
   overscroll-behavior: none;
-}
-
-body {
-  position: fixed;
-  inset: 0;
-  width: 100%;
 }
 
 /* Scrollable areas keep the gesture to themselves instead of handing it
