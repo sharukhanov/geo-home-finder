@@ -1,5 +1,5 @@
-import { eq, desc } from "drizzle-orm";
-import { attractionPoints, zones, feedback, type AttractionPoint, type InsertAttractionPoint, type Zone, type InsertZone, type Feedback, type InsertFeedback } from "@shared/schema";
+import { eq, desc, gte, sql } from "drizzle-orm";
+import { attractionPoints, zones, feedback, events, EVENT_NAMES, type AttractionPoint, type InsertAttractionPoint, type Zone, type InsertZone, type Feedback, type InsertFeedback, type InsertEvent, type AppEvent } from "@shared/schema";
 import { db } from "./db";
 
 export interface IStorage {
@@ -24,12 +24,54 @@ export interface IStorage {
   getFeedback(id: number): Promise<Feedback | undefined>;
   addFeedbackComment(id: number, comment: string): Promise<boolean>;
   listFeedback(limit: number): Promise<Feedback[]>;
+
+  // Funnel
+  createEvent(entry: InsertEvent): Promise<void>;
+  funnel(sinceDays: number): Promise<FunnelReport>;
+}
+
+/** Visitors who reached each step, plus where they arrived from. */
+export interface FunnelReport {
+  sinceDays: number;
+  steps: Array<{ name: string; visitors: number; events: number }>;
+  sources: Array<{ source: string; visitors: number }>;
+}
+
+// Counting people, not clicks: one visitor who adds four places is one visitor
+// at the "added a place" step. Clicks are reported alongside, since the gap
+// between the two is itself informative.
+function summarise(rows: Array<Pick<AppEvent, "userId" | "name" | "source">>): Omit<FunnelReport, "sinceDays"> {
+  const byStep = new Map<string, Set<string>>();
+  const counts = new Map<string, number>();
+  const bySource = new Map<string, Set<string>>();
+
+  for (const row of rows) {
+    if (!byStep.has(row.name)) byStep.set(row.name, new Set());
+    byStep.get(row.name)!.add(row.userId);
+    counts.set(row.name, (counts.get(row.name) ?? 0) + 1);
+
+    const source = row.source || "прямой заход";
+    if (!bySource.has(source)) bySource.set(source, new Set());
+    bySource.get(source)!.add(row.userId);
+  }
+
+  return {
+    steps: EVENT_NAMES.map((name) => ({
+      name,
+      visitors: byStep.get(name)?.size ?? 0,
+      events: counts.get(name) ?? 0,
+    })),
+    sources: Array.from(bySource.entries())
+      .map(([source, ids]) => ({ source, visitors: ids.size }))
+      .sort((a, b) => b.visitors - a.visitors),
+  };
 }
 
 export class MemStorage implements IStorage {
   private attractionPoints: Map<number, AttractionPoint>;
   private zones: Map<number, Zone>;
   private feedback: Map<number, Feedback>;
+  private events: Array<InsertEvent & { createdAt: Date }> = [];
   private currentPointId: number;
   private currentZoneId: number;
   private currentFeedbackId: number;
@@ -146,6 +188,18 @@ export class MemStorage implements IStorage {
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, limit);
   }
+
+  async createEvent(entry: InsertEvent): Promise<void> {
+    this.events.push({ ...entry, createdAt: new Date() });
+  }
+
+  async funnel(sinceDays: number): Promise<FunnelReport> {
+    const cutoff = Date.now() - sinceDays * 24 * 60 * 60 * 1000;
+    const rows = this.events
+      .filter((e) => e.createdAt.getTime() >= cutoff)
+      .map((e) => ({ userId: e.userId, name: e.name, source: e.source ?? null }));
+    return { sinceDays, ...summarise(rows) };
+  }
 }
 
 // PostgreSQL-backed storage (Drizzle ORM). Used when DATABASE_URL is set.
@@ -231,6 +285,47 @@ export class DbStorage implements IStorage {
 
   async listFeedback(limit: number): Promise<Feedback[]> {
     return db.select().from(feedback).orderBy(desc(feedback.createdAt)).limit(limit);
+  }
+
+  async createEvent(entry: InsertEvent): Promise<void> {
+    await db.insert(events).values(entry);
+  }
+
+  async funnel(sinceDays: number): Promise<FunnelReport> {
+    const cutoff = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+    // Aggregated in the database rather than pulled into memory, so the page
+    // stays cheap however much traffic arrives.
+    const steps = await db
+      .select({
+        name: events.name,
+        visitors: sql<number>`count(distinct ${events.userId})`.mapWith(Number),
+        events: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(events)
+      .where(gte(events.createdAt, cutoff))
+      .groupBy(events.name);
+
+    const sources = await db
+      .select({
+        source: sql<string>`coalesce(${events.source}, 'прямой заход')`,
+        visitors: sql<number>`count(distinct ${events.userId})`.mapWith(Number),
+      })
+      .from(events)
+      .where(gte(events.createdAt, cutoff))
+      .groupBy(sql`coalesce(${events.source}, 'прямой заход')`)
+      .orderBy(desc(sql`count(distinct ${events.userId})`))
+      .limit(20);
+
+    const byName = new Map(steps.map((s) => [s.name, s]));
+    return {
+      sinceDays,
+      steps: EVENT_NAMES.map((name) => ({
+        name,
+        visitors: byName.get(name)?.visitors ?? 0,
+        events: byName.get(name)?.events ?? 0,
+      })),
+      sources,
+    };
   }
 }
 

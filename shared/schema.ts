@@ -42,6 +42,41 @@ export const feedback = pgTable("feedback", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Product funnel. One row per step a visitor reaches, tied to the same
+// anonymous browser id as everything else — no accounts, no personal data.
+// `source` records where the visit came from (utm_source, or the referring
+// host) so traffic from a shared link can be told apart from direct visits.
+export const events = pgTable("events", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  name: text("name").notNull(),
+  source: text("source"),
+  // Small JSON blob of step-specific detail, e.g. how many places existed.
+  props: text("props"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// The funnel steps, in order. Kept as a closed list so the endpoint can't be
+// used as a free-form write channel, and so the summary page can rely on it.
+export const EVENT_NAMES = [
+  "open",
+  "place_added",
+  "zone_shown",
+  "address_checked",
+] as const;
+
+export const insertEventSchema = createInsertSchema(events)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    userId: z.string().min(1).max(64),
+    name: z.enum(EVENT_NAMES),
+    source: z.string().max(120).nullish(),
+    props: z.string().max(500).nullish(),
+  });
+
+export type InsertEvent = z.infer<typeof insertEventSchema>;
+export type AppEvent = typeof events.$inferSelect;
+
 export const insertFeedbackSchema = createInsertSchema(feedback).omit({
   id: true,
   createdAt: true,

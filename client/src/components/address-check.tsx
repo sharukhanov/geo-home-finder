@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Search } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserId } from "@/lib/user-id";
+import { track } from "@/lib/track";
 import { searchAddress, type GeocodeResult } from "@/lib/map-utils";
 import { getPointType, TRANSPORT_LABELS } from "@/lib/point-types";
 
@@ -73,6 +74,12 @@ export function AddressCheck({ onPointSelected }: AddressCheckProps) {
       });
       const data = (await response.json()) as { results: CheckResult[] };
       setChecked({ name: suggestion.displayName, results: data.results });
+
+      // Step 4: they are now testing the answer against a real flat, which is
+      // the strongest signal short of asking for their contact details.
+      track("address_checked", {
+        allWithinLimit: data.results.every((r) => r.withinLimit === true),
+      });
     } catch {
       setChecked(null);
     } finally {

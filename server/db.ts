@@ -59,5 +59,17 @@ export async function ensureSchema(): Promise<void> {
       context TEXT,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS events (
+      id SERIAL PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      source TEXT,
+      props TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    -- The funnel counts distinct visitors per step, and filters by date.
+    CREATE INDEX IF NOT EXISTS events_name_created_idx ON events (name, created_at);
   `);
 }

@@ -11,6 +11,7 @@ import { MapPin, Menu, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-rea
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserId } from "@/lib/user-id";
+import { track, trackOnce } from "@/lib/track";
 import type { IsochroneFeature, CalculateResponse } from "@/lib/geo-types";
 import { useToast } from "@/hooks/use-toast";
 import type { AttractionPoint, Zone } from "@shared/schema";
@@ -58,6 +59,11 @@ export default function Home() {
     },
   });
 
+  // Step 1 of the funnel: someone actually arrived and the page rendered.
+  useEffect(() => {
+    trackOnce("open");
+  }, []);
+
   const clearResults = useCallback(() => {
     setIsochrones([]);
     setOptimalArea(null);
@@ -73,6 +79,14 @@ export default function Home() {
     },
     onSuccess: (data) => {
       setIsCalculating(false);
+
+      // Step 3: the visitor got the answer they came for. Which mode produced
+      // it matters — an approximate zone is a weaker result than a real one.
+      track("zone_shown", {
+        mode: data.mode,
+        places: attractionPoints.length,
+        hasArea: data.mode === "isochrone" ? !!data.optimalArea : undefined,
+      });
 
       if (data.mode === "isochrone") {
         setUseIsochrones(true);
