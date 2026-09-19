@@ -5,6 +5,7 @@ import { MapContainer } from "@/components/map-container";
 import { ControlPanel } from "@/components/control-panel";
 import { ResultCard } from "@/components/result-card";
 import { Onboarding } from "@/components/onboarding";
+import { ResetButton } from "@/components/reset-button";
 import { Methodology } from "@/components/methodology";
 import { Button } from "@/components/ui/button";
 import { MapPin, Menu, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
@@ -174,6 +175,15 @@ export default function Home() {
             <h1 className="text-xl font-bold text-slate-900">Fatera</h1>
           </div>
           <div className="flex items-center gap-2">
+            {/* Starting over belongs on the map, not inside the panel — there
+                is nothing to reset until something has been added. */}
+            {attractionPoints.length > 0 && (
+              <ResetButton
+                onReset={clearResults}
+                onClearSelectedPoint={() => setSelectedPoint(null)}
+              />
+            )}
+
             {/* Collapse the panel to see the whole map (desktop) */}
             <Button
               variant="outline"
@@ -234,7 +244,10 @@ export default function Home() {
             selectedPoint={selectedPoint}
             onClearSelectedPoint={() => setSelectedPoint(null)}
             onPointSelected={(lat, lng) => setSelectedPoint({ lat, lng })}
-            onReset={clearResults}
+            // The answer appears on the map, so once a place is saved the
+            // sheet steps aside instead of covering the thing it just
+            // produced. Harmless on desktop, where the panel is a sidebar.
+            onPlaceAdded={() => setIsPanelOpen(false)}
             onShowMethodology={() => setShowMethodology(true)}
           />
         </div>
