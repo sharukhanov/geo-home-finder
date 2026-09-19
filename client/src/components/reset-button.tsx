@@ -63,12 +63,11 @@ export function ResetButton({ onReset, onClearSelectedPoint }: ResetButtonProps)
           aria-label="Начать заново"
           className="rounded-full"
         >
-          <RotateCcw className="w-4 h-4 sm:mr-2" />
-          {/* The icon carries the meaning on a narrow screen; the label would
-              crowd out the service name next to it. */}
-          <span className="hidden sm:inline">
-            {resetMutation.isPending ? "Сбрасываем…" : "Начать заново"}
-          </span>
+          <RotateCcw className="w-4 h-4 mr-2" />
+          {/* Labelled on every size. A lone circular arrow reads as "refresh"
+              rather than "delete my places", and the header has the room:
+              the panel toggle beside it is desktop-only. */}
+          {resetMutation.isPending ? "Сбрасываем…" : "Начать заново"}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
