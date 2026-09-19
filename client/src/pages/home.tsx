@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserId } from "@/lib/user-id";
 import { track, trackOnce } from "@/lib/track";
-import type { IsochroneFeature, CalculateResponse } from "@/lib/geo-types";
+import type { IsochroneFeature, CalculateResponse, Transport } from "@/lib/geo-types";
 import { useToast } from "@/hooks/use-toast";
 import type { AttractionPoint, Zone } from "@shared/schema";
 
@@ -38,6 +38,7 @@ export default function Home() {
   const [optimalArea, setOptimalArea] = useState<MultiPolygon | null>(null);
   const [districts, setDistricts] = useState<string[]>([]);
   const [useIsochrones, setUseIsochrones] = useState(false);
+  const [failedTransports, setFailedTransports] = useState<Transport[]>([]);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const userId = getUserId();
@@ -70,6 +71,7 @@ export default function Home() {
     setOptimalArea(null);
     setDistricts([]);
     setUseIsochrones(false);
+    setFailedTransports([]);
   }, []);
 
   const calculateZonesMutation = useMutation({
@@ -94,11 +96,13 @@ export default function Home() {
         setIsochrones(data.isochrones);
         setOptimalArea(data.optimalArea);
         setDistricts(data.districts ?? []);
+        setFailedTransports([]);
       } else {
         setUseIsochrones(false);
         setIsochrones([]);
         setOptimalArea(null);
         setDistricts([]);
+        setFailedTransports(data.failedTransports ?? []);
         queryClient.invalidateQueries({ queryKey: ["/api/zones"] });
       }
     },
@@ -287,6 +291,7 @@ export default function Home() {
           districts={districts}
           points={attractionPoints}
           approximate={!useIsochrones}
+          failedTransports={failedTransports}
         />
       )}
 

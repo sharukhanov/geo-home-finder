@@ -25,8 +25,21 @@ export interface OptimalAreaResult {
   optimalArea: MultiPolygon | null;
 }
 
-// Returns null if any place's isochrone could not be fetched, so the caller
-// can fall back to the approximate algorithm.
+/** Which places the provider couldn't answer for, and how they travel. */
+export interface IsochroneFailure {
+  pointId: number;
+  name: string;
+  transport: Transport;
+}
+
+export type OptimalAreaOutcome =
+  | ({ ok: true } & OptimalAreaResult)
+  // Naming what failed is the difference between "the service is broken" and
+  // "this city has no bus data — try by car", which the user can act on.
+  | { ok: false; failures: IsochroneFailure[] };
+
+// Falls back when any place's isochrone is missing: an intersection computed
+// from a subset would quietly answer a different question.
 export async function computeOptimalArea(
   points: Array<{
     id: number;
@@ -37,8 +50,17 @@ export async function computeOptimalArea(
     arrivalHour: number;
     transport: string;
   }>,
-): Promise<OptimalAreaResult | null> {
-  if (!routingProvider.isAvailable()) return null;
+): Promise<OptimalAreaOutcome> {
+  if (!routingProvider.isAvailable()) {
+    return {
+      ok: false,
+      failures: points.map((p) => ({
+        pointId: p.id,
+        name: p.name,
+        transport: (p.transport as Transport) || "public_transport",
+      })),
+    };
+  }
 
   // In parallel, not one after another: the places are independent, and
   // sequentially the wait — and the timeout budget — multiplied by their
@@ -54,14 +76,18 @@ export async function computeOptimalArea(
         transport: (point.transport as Transport) || "public_transport",
         arrivalHour: point.arrivalHour,
       });
-      return geometry ? { pointId: point.id, name: point.name, geometry } : null;
+      const transport = (point.transport as Transport) || "public_transport";
+      return geometry
+        ? { ok: true as const, value: { pointId: point.id, name: point.name, geometry } }
+        : { ok: false as const, failure: { pointId: point.id, name: point.name, transport } };
     }),
   );
 
   // One missing area makes the intersection meaningless, so the whole
   // calculation falls back rather than quietly answering about fewer places.
-  if (results.some((r) => r === null)) return null;
-  const isochrones = results as Isochrone[];
+  const failures = results.filter((r) => !r.ok).map((r) => r.failure!);
+  if (failures.length > 0) return { ok: false, failures };
+  const isochrones = results.map((r) => r.value!);
 
   let optimalArea: MultiPolygon | null;
   if (isochrones.length === 1) {
@@ -82,5 +108,5 @@ export async function computeOptimalArea(
         : null;
   }
 
-  return { isochrones, optimalArea };
+  return { ok: true, isochrones, optimalArea };
 }

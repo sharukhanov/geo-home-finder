@@ -4,12 +4,15 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { getPointType, TRANSPORT_LABELS } from "@/lib/point-types";
 import { FeedbackWidget } from "./feedback-widget";
 import type { AttractionPoint } from "@shared/schema";
+import type { Transport } from "@/lib/geo-types";
 
 interface ResultCardProps {
   hasOptimal: boolean;
   districts: string[];
   points: AttractionPoint[];
   approximate?: boolean;
+  /** Ways of travelling 2GIS had no data for, when the result is approximate. */
+  failedTransports?: Transport[];
 }
 
 export function ResultCard({
@@ -17,6 +20,7 @@ export function ResultCard({
   districts,
   points,
   approximate = false,
+  failedTransports = [],
 }: ResultCardProps) {
   const [showDetails, setShowDetails] = useState(false);
   // On a phone this card covered the map with no way out, so it starts
@@ -26,6 +30,14 @@ export function ResultCard({
   );
 
   const title = hasOptimal ? "Ищите жильё в зелёной зоне" : "Общей зоны нет";
+
+  // An approximate result looks the same as a real one, so say so where it
+  // can't be missed — and, when we know which way of travelling 2GIS has no
+  // data for, name the switch that would fix it.
+  const missing = failedTransports
+    .map((t) => TRANSPORT_LABELS[t]?.label)
+    .filter(Boolean);
+  const canRetryByCar = missing.length > 0 && !failedTransports.includes("driving");
 
   if (collapsed) {
     return (
@@ -97,6 +109,21 @@ export function ResultCard({
             >
               <ChevronDown className="w-4 h-4" />
             </button>
+          </div>
+        )}
+
+        {approximate && (
+          <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
+            <span className="font-medium">Расчёт приблизительный, по прямой линии.</span>{" "}
+            {missing.length > 0 ? (
+              <>
+                У 2ГИС нет маршрутов для этого города
+                {missing.length === 1 ? ` (${missing[0]})` : ` (${missing.join(", ")})`}.
+                {canRetryByCar && " Попробуйте изменить место на «На машине» — по автодорогам данные есть почти везде."}
+              </>
+            ) : (
+              "Не удалось получить данные о маршрутах."
+            )}
           </div>
         )}
 
