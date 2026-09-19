@@ -28,6 +28,7 @@ export interface IStorage {
   // Funnel
   createEvent(entry: InsertEvent): Promise<void>;
   funnel(sinceDays: number): Promise<FunnelReport>;
+  clearEvents(): Promise<number>;
 }
 
 /** Visitors who reached each step, plus where they arrived from. */
@@ -200,6 +201,12 @@ export class MemStorage implements IStorage {
       .map((e) => ({ userId: e.userId, name: e.name, source: e.source ?? null }));
     return { sinceDays, ...summarise(rows) };
   }
+
+  async clearEvents(): Promise<number> {
+    const removed = this.events.length;
+    this.events = [];
+    return removed;
+  }
 }
 
 // PostgreSQL-backed storage (Drizzle ORM). Used when DATABASE_URL is set.
@@ -326,6 +333,11 @@ export class DbStorage implements IStorage {
       })),
       sources,
     };
+  }
+
+  async clearEvents(): Promise<number> {
+    const rows = await db.delete(events).returning({ id: events.id });
+    return rows.length;
   }
 }
 

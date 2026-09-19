@@ -24,13 +24,32 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// A value going inside <script> needs more than JSON quoting: a literal
+// "</script>" in the string would close the tag and escape into markup.
+function toJsLiteral(value: string): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
 function pct(part: number, whole: number): string {
   if (!whole) return "—";
   return `${Math.round((part / whole) * 100)}%`;
 }
 
-export function renderStatsPage(report: FunnelReport): string {
+const PERIODS: Array<{ days: number; label: string }> = [
+  { days: 1, label: "24 часа" },
+  { days: 7, label: "7 дней" },
+  { days: 30, label: "30 дней" },
+  { days: 90, label: "90 дней" },
+];
+
+export function renderStatsPage(report: FunnelReport, token: string): string {
   const top = report.steps[0]?.visitors ?? 0;
+  const q = encodeURIComponent(token);
+
+  const periods = PERIODS.map(
+    ({ days, label }) =>
+      `<a class="period${days === report.sinceDays ? " on" : ""}" href="/api/stats?token=${q}&days=${days}">${label}</a>`,
+  ).join("");
 
   const rows = report.steps
     .map((step, i) => {
@@ -98,16 +117,31 @@ export function renderStatsPage(report: FunnelReport): string {
   td { padding: 10px 14px; border-top: 1px solid #f1f5f9; }
   tr:first-child td { border-top: 0; }
   .num { text-align: right; font-weight: 600; width: 90px; }
-  footer { margin-top: 32px; font-size: 13px; color: #64748b; }
+  footer { margin-top: 36px; font-size: 13px; color: #64748b;
+    border-top: 1px solid #e2e8f0; padding-top: 20px; }
+  .periods { display: flex; gap: 8px; margin: 16px 0 0; flex-wrap: wrap; }
+  .period { font-size: 14px; text-decoration: none; color: #334155;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 999px;
+    padding: 7px 16px; }
+  .period.on { background: #0a66ff; border-color: #0a66ff; color: #fff; font-weight: 600; }
+  #reset { font: inherit; font-weight: 600; color: #b91c1c; background: #fff;
+    border: 1px solid #fecaca; border-radius: 10px; padding: 9px 16px; cursor: pointer; }
+  #reset:hover { background: #fef2f2; }
+  #reset:disabled { opacity: .6; cursor: default; }
   @media (prefers-color-scheme: dark) {
     body { background: #0b1220; color: #e2e8f0; }
-    .step, table { background: #131c2e; border-color: #1e293b; }
+    .step, table, .period { background: #131c2e; border-color: #1e293b; color: #cbd5e1; }
+    .period.on { background: #0a66ff; border-color: #0a66ff; color: #fff; }
+    footer { border-color: #1e293b; }
+    #reset { background: #1f1416; border-color: #4c1d1d; color: #fca5a5; }
     .bar { background: #17305c; }
     td { border-color: #1e293b; }
   }
 </style></head><body>
   <h1>Воронка</h1>
-  <div class="hint">За последние ${report.sinceDays} дн. Считаются люди, а не клики: один человек, добавивший четыре места, — это один человек на шаге «добавили место».</div>
+  <div class="hint">Считаются люди, а не клики: один человек, добавивший четыре места, — это один человек на шаге «добавили место».</div>
+
+  <div class="periods">${periods}</div>
 
   <h2>Путь посетителя</h2>
   ${rows}
@@ -116,7 +150,37 @@ export function renderStatsPage(report: FunnelReport): string {
   <table>${sources}</table>
 
   <footer>
-    Период меняется параметром <code>?days=30</code>. Сырые данные — <code>&amp;format=json</code>.
+    <button id="reset" type="button">Обнулить счётчик</button>
+    <div class="hint" style="margin-top:8px">
+      Удалит всю историю шагов, чтобы запуск считался с нуля и не включал ваши
+      собственные заходы. Места, зоны и отзывы не трогает. Отменить нельзя.
+    </div>
+    <div class="hint" style="margin-top:16px">Сырые данные — <code>&amp;format=json</code>.</div>
   </footer>
+
+  <script>
+    const token = ${toJsLiteral(token)};
+    document.getElementById("reset").addEventListener("click", async (e) => {
+      const button = e.currentTarget;
+      if (!confirm("Удалить всю историю шагов? Это нельзя отменить.")) return;
+      button.disabled = true;
+      button.textContent = "Обнуляем…";
+      try {
+        const res = await fetch("/api/stats/reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        const { removed } = await res.json();
+        alert("Удалено записей: " + removed);
+        location.reload();
+      } catch (err) {
+        button.disabled = false;
+        button.textContent = "Обнулить счётчик";
+        alert("Не удалось обнулить: " + err.message);
+      }
+    });
+  </script>
 </body></html>`;
 }
