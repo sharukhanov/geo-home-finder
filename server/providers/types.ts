@@ -29,6 +29,13 @@ export interface IsochroneRequest {
 }
 
 /** Reachability areas and point-to-point travel times. */
+/** One line of a live check against the upstream service. */
+export interface ProviderCheck {
+  label: string;
+  ok: boolean;
+  detail: string;
+}
+
 export interface RoutingProvider {
   readonly name: string;
   /** False when the provider isn't configured (e.g. missing API key). */
@@ -41,6 +48,12 @@ export interface RoutingProvider {
     to: GeoPoint,
     transport: Transport,
   ): Promise<number | null>;
+  /**
+   * Live checks against the upstream service, for answering "why are we in
+   * approximate mode?" without reading server logs. Optional: a provider that
+   * cannot be probed simply omits it.
+   */
+  selfTest?(point: GeoPoint): Promise<ProviderCheck[]>;
 }
 
 /** Address search and reverse lookup. */

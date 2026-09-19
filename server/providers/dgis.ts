@@ -13,6 +13,7 @@ import { parse as parseWkt } from "wellknown";
 import type { Geometry, MultiPolygon, Polygon } from "geojson";
 import type {
   GeoPoint,
+  ProviderCheck,
   GeocodeResult,
   GeocodingProvider,
   IsochroneRequest,
@@ -20,7 +21,7 @@ import type {
   Transport,
 } from "./types";
 
-const ISOCHRONE_URL = "https://routing.api.2gis.com/isochrone/2.0.0";
+const ISOCHRONE_URL = process.env.DGIS_ISOCHRONE_URL ?? "https://routing.api.2gis.com/isochrone/2.0.0";
 const ROUTING_URL = "https://routing.api.2gis.com/routing/7.0.0/global";
 const PUBLIC_TRANSPORT_URL = "https://routing.api.2gis.com/public_transport/2.0";
 const ITEMS_URL = "https://catalog.api.2gis.com/3.0/items";
@@ -75,23 +76,42 @@ function nextWeekdayStartTime(hourMsk: number): string {
 // user watches a spinner forever and the connections pile up on our side.
 const REQUEST_TIMEOUT_MS = 12_000;
 
-async function postJson(url: string, body: unknown): Promise<any | null> {
+/**
+ * Keeps the upstream's own words. The normal path only needs "did it work",
+ * but the diagnostic page needs to show exactly what 2GIS said — "no route
+ * found here" and "your key expired" look identical once both are null.
+ */
+async function postJsonDetailed(
+  url: string,
+  body: unknown,
+): Promise<{ data: any | null; error: string | null }> {
   const key = apiKey();
-  if (!key) return null;
+  if (!key) return { data: null, error: "DGIS_API_KEY не задан" };
 
-  const response = await fetch(`${url}?key=${key}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${url}?key=${key}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`2GIS request to ${url} failed: ${message}`);
+    return { data: null, error: `сеть или таймаут: ${message}` };
+  }
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     console.error(`2GIS HTTP ${response.status} (${url}): ${text.slice(0, 200)}`);
-    return null;
+    return { data: null, error: `HTTP ${response.status}: ${text.slice(0, 300)}` };
   }
-  return response.json();
+  return { data: await response.json(), error: null };
+}
+
+async function postJson(url: string, body: unknown): Promise<any | null> {
+  return (await postJsonDetailed(url, body)).data;
 }
 
 interface DgisItem {
@@ -188,6 +208,36 @@ export const dgisProvider: RoutingProvider & GeocodingProvider = {
       return null;
     }
     return toMultiPolygon(parseWkt(wkt));
+  },
+
+  async selfTest(point: GeoPoint): Promise<ProviderCheck[]> {
+    const checks: ProviderCheck[] = [
+      {
+        label: "Ключ DGIS_API_KEY задан",
+        ok: Boolean(apiKey()),
+        detail: apiKey() ? "да" : "нет — без него зоны всегда приблизительные",
+      },
+    ];
+    if (!apiKey()) return checks;
+
+    // One request per transport mode: coverage differs between them, and a
+    // city with no public transport data still routes cars fine.
+    for (const transport of ["public_transport", "driving", "walking"] as Transport[]) {
+      const { data, error } = await postJsonDetailed(ISOCHRONE_URL, {
+        start: { lat: point.lat, lon: point.lng },
+        durations: [1800],
+        transport,
+        reverse: false,
+        start_time: nextWeekdayStartTime(9),
+      });
+      const wkt = (data?.isochrones as Array<{ geometry?: string }> | undefined)?.[0]?.geometry;
+      checks.push({
+        label: `Изохрона 30 мин · ${transport}`,
+        ok: Boolean(wkt),
+        detail: error ?? (wkt ? "построена" : "ответ без геометрии — для этой точки данных нет"),
+      });
+    }
+    return checks;
   },
 
   async travelTimeMinutes(from: GeoPoint, to: GeoPoint, transport: Transport) {
