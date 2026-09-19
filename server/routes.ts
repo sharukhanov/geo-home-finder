@@ -539,10 +539,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.query.format === "json") {
         return res.json(report);
       }
-      res.type("html").send(renderStatsPage(report));
+      res.type("html").send(renderStatsPage(report, adminToken));
     } catch (error) {
       console.error("Failed to build funnel:", error);
       res.status(500).json({ message: "Failed to build funnel" });
+    }
+  });
+
+  // Wipe the funnel, so a launch starts from zero instead of counting our own
+  // testing. POST rather than GET: a link that erases data when something
+  // merely follows it is a trap waiting for a crawler or a prefetch.
+  app.post("/api/stats/reset", async (req, res) => {
+    const adminToken = process.env.ADMIN_TOKEN;
+    const supplied = (req.body?.token ?? req.query.token) as unknown;
+    if (!adminToken || supplied !== adminToken) {
+      return res.status(404).json({ message: "Not found" });
+    }
+    try {
+      const removed = await storage.clearEvents();
+      console.warn(`Funnel reset: ${removed} events deleted`);
+      res.json({ removed });
+    } catch (error) {
+      console.error("Failed to reset funnel:", error);
+      res.status(500).json({ message: "Failed to reset funnel" });
     }
   });
 
@@ -611,6 +630,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Reverse geocode failed:", error);
       res.status(502).json({ message: "Geocoding service unavailable" });
     }
+  });
+
+  // Anything under /api that got this far doesn't exist. Without this the SPA
+  // catch-all answers with the app's HTML, so a typo in an API path looks like
+  // a success to whatever called it.
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ message: "Not found" });
   });
 
   const httpServer = createServer(app);
