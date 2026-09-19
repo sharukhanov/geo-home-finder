@@ -1,24 +1,9 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AttractionPointForm, FORM_ID } from "./attraction-point-form";
 import { AddressCheck } from "./address-check";
 import { PointsList } from "./points-list";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { PlusCircle, RotateCcw, HelpCircle } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
-import { getUserId } from "@/lib/user-id";
-import { useToast } from "@/hooks/use-toast";
+import { PlusCircle, HelpCircle } from "lucide-react";
 import type { AttractionPoint } from "@shared/schema";
 
 interface ControlPanelProps {
@@ -26,7 +11,8 @@ interface ControlPanelProps {
   selectedPoint: {lat: number, lng: number} | null;
   onClearSelectedPoint: () => void;
   onPointSelected: (lat: number, lng: number) => void;
-  onReset: () => void;
+  /** A place was saved — the caller decides whether to get out of the way. */
+  onPlaceAdded: () => void;
   onShowMethodology: () => void;
 }
 
@@ -35,41 +21,16 @@ export function ControlPanel({
   selectedPoint,
   onClearSelectedPoint,
   onPointSelected,
-  onReset,
+  onPlaceAdded,
   onShowMethodology,
 }: ControlPanelProps) {
   const hasPoints = attractionPoints.length > 0;
   // Once the user has places, the form collapses into a single button.
   const [showForm, setShowForm] = useState(false);
   const [addPending, setAddPending] = useState(false);
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
   // A pending map selection always opens the form — otherwise the picked
   // address would land in a collapsed form the user can't see.
   const formVisible = !hasPoints || showForm || selectedPoint !== null;
-
-  const resetMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", "/api/reset", { userId: getUserId() });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/attraction-points"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/zones"] });
-      onClearSelectedPoint();
-      onReset();
-      setShowForm(false);
-      toast({ title: "Всё сброшено", description: "Можно начать заново." });
-    },
-    onError: () => {
-      toast({
-        title: "Ошибка",
-        description: "Не удалось сбросить данные. Попробуйте ещё раз.",
-        variant: "destructive",
-      });
-    },
-  });
-
 
   return (
     <div className="h-full flex flex-col">
@@ -112,7 +73,10 @@ export function ControlPanel({
             selectedPoint={selectedPoint}
             onClearSelectedPoint={onClearSelectedPoint}
             onPointSelected={onPointSelected}
-            onAdded={() => setShowForm(false)}
+            onAdded={() => {
+              setShowForm(false);
+              onPlaceAdded();
+            }}
             onPendingChange={setAddPending}
           />
         ) : (
@@ -144,56 +108,21 @@ export function ControlPanel({
       </div>
 
       {/* Footer: always outside the scroll area, so the primary action can
-          never be scrolled out of view. */}
-      {(formVisible || hasPoints) && (
+          never be scrolled out of view. Starting over is in the header, where
+          it is reachable without opening the panel. */}
+      {formVisible && (
         <div
-          className="px-6 pt-3 border-t border-slate-100 bg-white space-y-2 flex-none"
+          className="px-6 pt-3 border-t border-slate-100 bg-white flex-none"
           style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
         >
-          {formVisible && (
-            <Button
-              type="submit"
-              form={FORM_ID}
-              disabled={addPending}
-              className="w-full h-12 text-base rounded-2xl"
-            >
-              {addPending ? "Добавляем…" : "Добавить место"}
-            </Button>
-          )}
-
-          {hasPoints && (
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                disabled={resetMutation.isPending}
-                variant="ghost"
-                size="sm"
-                className="w-full text-slate-500"
-              >
-                <RotateCcw className="w-4 h-4 mr-2" />
-                {resetMutation.isPending ? "Сбрасываем..." : "Сбросить всё"}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Удалить все места?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Мы удалим все добавленные места и рассчитанные зоны.
-                  Это действие нельзя отменить.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Оставить</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => resetMutation.mutate()}
-                  className="bg-red-600 hover:bg-red-700 text-white"
-                >
-                  Удалить всё
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-          )}
+          <Button
+            type="submit"
+            form={FORM_ID}
+            disabled={addPending}
+            className="w-full h-12 text-base rounded-2xl"
+          >
+            {addPending ? "Добавляем…" : "Добавить место"}
+          </Button>
         </div>
       )}
     </div>
