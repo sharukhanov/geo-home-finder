@@ -397,11 +397,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No attraction points found" });
       }
 
+      // Which places the provider couldn't answer for, so the response can
+      // say why the result is approximate instead of just that it is.
+      let failedTransports: string[] = [];
+
       // Try the real isochrone approach first.
       if (routingProvider.isAvailable()) {
         try {
           const result = await computeOptimalArea(points);
-          if (result) {
+          if (result.ok) {
             // Name the districts inside the zone — the practical takeaway.
             const districts = result.optimalArea
               ? await findDistrictsInPolygon(result.optimalArea)
@@ -413,7 +417,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               districts,
             });
           }
-          console.warn("Isochrone computation unavailable; falling back to approximate mode");
+          failedTransports = Array.from(new Set(result.failures.map((f) => f.transport)));
+          console.warn(
+            "Isochrone unavailable for " +
+              result.failures.map((f) => `${f.name} (${f.transport})`).join(", ") +
+              "; falling back to approximate mode",
+          );
         } catch (err) {
           console.error("Isochrone error; falling back to approximate mode:", err);
         }
@@ -435,7 +444,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         newZones.push(zone);
       }
 
-      res.json({ mode: "circle", zones: newZones });
+      res.json({ mode: "circle", zones: newZones, failedTransports });
     } catch (error) {
       res.status(500).json({ message: "Failed to calculate zones" });
     }

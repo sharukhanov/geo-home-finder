@@ -19,4 +19,9 @@ export type CalculateResponse =
   | {
       mode: "circle";
       zones: unknown[];
+      /**
+       * Ways of travelling the routing provider had no data for. Empty when
+       * the fallback happened for some other reason.
+       */
+      failedTransports?: Transport[];
     };
