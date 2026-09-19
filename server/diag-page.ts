@@ -75,6 +75,19 @@ function verdict(checks: ProviderCheck[]): { title: string; body: string; ok: bo
     };
   }
 
+  // Same reasoning as the timeout branch: a request that never reached 2GIS
+  // tells us nothing about what 2GIS knows.
+  if (isochrones.every((c) => !c.ok && c.detail.startsWith("сеть"))) {
+    return {
+      ok: false,
+      title: "2ГИС недоступен",
+      body:
+        "До сервиса не удаётся достучаться — он лежит, либо с нашего сервера " +
+        "нет сети до него. Пока это так, зоны считаются приблизительно. " +
+        "Подробности ниже.",
+    };
+  }
+
   if (working.length === 0) {
     return {
       ok: false,
