@@ -61,6 +61,20 @@ function verdict(checks: ProviderCheck[]): { title: string; body: string; ok: bo
     };
   }
 
+  // Must come before the "no data" verdict: a request we hung up on says
+  // nothing about coverage, and confusing the two sends you looking in
+  // entirely the wrong place.
+  if (isochrones.every((c) => !c.ok && c.detail.startsWith("не ответил"))) {
+    return {
+      ok: false,
+      title: "2ГИС не отвечает вовремя",
+      body:
+        "Запросы обрываются по таймауту, поэтому сервис переключается на " +
+        "приблизительный расчёт. Данные у 2ГИС, скорее всего, есть — мы их не дожидаемся. " +
+        "Ожидание настраивается переменной DGIS_ISOCHRONE_TIMEOUT_MS.",
+    };
+  }
+
   if (working.length === 0) {
     return {
       ok: false,

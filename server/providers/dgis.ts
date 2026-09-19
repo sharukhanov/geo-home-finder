@@ -76,6 +76,12 @@ function nextWeekdayStartTime(hourMsk: number): string {
 // user watches a spinner forever and the connections pile up on our side.
 const REQUEST_TIMEOUT_MS = 12_000;
 
+// Isochrones are far heavier than a single route: 2GIS walks the whole network
+// out to the time limit, and public transport with a rush-hour timestamp is the
+// slowest case of all. A 12s deadline was cutting real answers off and dropping
+// the service into approximate mode, so this one gets its own, longer budget.
+const ISOCHRONE_TIMEOUT_MS = Number(process.env.DGIS_ISOCHRONE_TIMEOUT_MS ?? 25_000);
+
 /**
  * Keeps the upstream's own words. The normal path only needs "did it work",
  * but the diagnostic page needs to show exactly what 2GIS said — "no route
@@ -84,6 +90,7 @@ const REQUEST_TIMEOUT_MS = 12_000;
 async function postJsonDetailed(
   url: string,
   body: unknown,
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<{ data: any | null; error: string | null }> {
   const key = apiKey();
   if (!key) return { data: null, error: "DGIS_API_KEY не задан" };
@@ -94,12 +101,22 @@ async function postJsonDetailed(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
+    const timedOut = err instanceof Error && err.name === "TimeoutError";
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`2GIS request to ${url} failed: ${message}`);
-    return { data: null, error: `сеть или таймаут: ${message}` };
+    // Name the deadline in the message: "it timed out" is only actionable if
+    // you know what it timed out against.
+    console.error(
+      timedOut
+        ? `2GIS request to ${url} exceeded ${timeoutMs}ms`
+        : `2GIS request to ${url} failed: ${message}`,
+    );
+    return {
+      data: null,
+      error: timedOut ? `не ответил за ${timeoutMs} мс` : `сеть: ${message}`,
+    };
   }
 
   if (!response.ok) {
@@ -110,8 +127,12 @@ async function postJsonDetailed(
   return { data: await response.json(), error: null };
 }
 
-async function postJson(url: string, body: unknown): Promise<any | null> {
-  return (await postJsonDetailed(url, body)).data;
+async function postJson(
+  url: string,
+  body: unknown,
+  timeoutMs?: number,
+): Promise<any | null> {
+  return (await postJsonDetailed(url, body, timeoutMs)).data;
 }
 
 interface DgisItem {
@@ -193,13 +214,17 @@ export const dgisProvider: RoutingProvider & GeocodingProvider = {
       );
     }
 
-    const data = await postJson(ISOCHRONE_URL, {
-      start: { lat, lon: lng },
-      durations: [durationSec],
-      transport,
-      reverse: false,
-      start_time: nextWeekdayStartTime(arrivalHour),
-    });
+    const data = await postJson(
+      ISOCHRONE_URL,
+      {
+        start: { lat, lon: lng },
+        durations: [durationSec],
+        transport,
+        reverse: false,
+        start_time: nextWeekdayStartTime(arrivalHour),
+      },
+      ISOCHRONE_TIMEOUT_MS,
+    );
     if (!data) return null;
 
     const wkt = (data.isochrones as Array<{ geometry?: string }> | undefined)?.[0]?.geometry;
@@ -223,13 +248,17 @@ export const dgisProvider: RoutingProvider & GeocodingProvider = {
     // One request per transport mode: coverage differs between them, and a
     // city with no public transport data still routes cars fine.
     for (const transport of ["public_transport", "driving", "walking"] as Transport[]) {
-      const { data, error } = await postJsonDetailed(ISOCHRONE_URL, {
-        start: { lat: point.lat, lon: point.lng },
-        durations: [1800],
-        transport,
-        reverse: false,
-        start_time: nextWeekdayStartTime(9),
-      });
+      const { data, error } = await postJsonDetailed(
+        ISOCHRONE_URL,
+        {
+          start: { lat: point.lat, lon: point.lng },
+          durations: [1800],
+          transport,
+          reverse: false,
+          start_time: nextWeekdayStartTime(9),
+        },
+        ISOCHRONE_TIMEOUT_MS,
+      );
       const wkt = (data?.isochrones as Array<{ geometry?: string }> | undefined)?.[0]?.geometry;
       checks.push({
         label: `Изохрона 30 мин · ${transport}`,
