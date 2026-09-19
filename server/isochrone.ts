@@ -40,20 +40,28 @@ export async function computeOptimalArea(
 ): Promise<OptimalAreaResult | null> {
   if (!routingProvider.isAvailable()) return null;
 
-  const isochrones: Isochrone[] = [];
+  // In parallel, not one after another: the places are independent, and
+  // sequentially the wait — and the timeout budget — multiplied by their
+  // number, which is exactly when a slow provider tipped the whole
+  // calculation into approximate mode.
+  const results = await Promise.all(
+    points.map(async (point) => {
+      // Each place has its own way of getting there (drive to work, walk to gym).
+      const geometry = await routingProvider.isochrone({
+        lat: point.latitude,
+        lng: point.longitude,
+        durationSec: point.travelTimeMinutes * 60,
+        transport: (point.transport as Transport) || "public_transport",
+        arrivalHour: point.arrivalHour,
+      });
+      return geometry ? { pointId: point.id, name: point.name, geometry } : null;
+    }),
+  );
 
-  for (const point of points) {
-    // Each place has its own way of getting there (drive to work, walk to gym).
-    const geometry = await routingProvider.isochrone({
-      lat: point.latitude,
-      lng: point.longitude,
-      durationSec: point.travelTimeMinutes * 60,
-      transport: (point.transport as Transport) || "public_transport",
-      arrivalHour: point.arrivalHour,
-    });
-    if (!geometry) return null;
-    isochrones.push({ pointId: point.id, name: point.name, geometry });
-  }
+  // One missing area makes the intersection meaningless, so the whole
+  // calculation falls back rather than quietly answering about fewer places.
+  if (results.some((r) => r === null)) return null;
+  const isochrones = results as Isochrone[];
 
   let optimalArea: MultiPolygon | null;
   if (isochrones.length === 1) {
