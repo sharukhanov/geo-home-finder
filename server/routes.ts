@@ -7,6 +7,8 @@ import { computeOptimalArea } from "./isochrone";
 import { routingProvider } from "./providers";
 import { travelTimeMinutes } from "./travel-time";
 import { renderFeedbackPage } from "./feedback-page";
+import { renderStatsPage } from "./stats-page";
+import { insertEventSchema } from "@shared/schema";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import type { Request } from "express";
 import { z } from "zod";
@@ -504,6 +506,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to load feedback:", error);
       res.status(500).json({ message: "Failed to load feedback" });
+    }
+  });
+
+  // --- Funnel (anonymous, tied to the browser id) ---
+
+  // Record one step of the funnel. Deliberately forgiving: a analytics write
+  // must never break the thing it is measuring, so a bad payload is dropped
+  // quietly rather than surfaced to the user.
+  app.post("/api/events", async (req, res) => {
+    const parsed = insertEventSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(204).send();
+    }
+    try {
+      await storage.createEvent(parsed.data);
+    } catch (error) {
+      console.error("Failed to record event:", error);
+    }
+    res.status(204).send();
+  });
+
+  // Funnel summary. Same protection as the feedback page.
+  app.get("/api/stats", async (req, res) => {
+    const adminToken = process.env.ADMIN_TOKEN;
+    if (!adminToken || req.query.token !== adminToken) {
+      return res.status(404).json({ message: "Not found" });
+    }
+    try {
+      const days = Math.min(Math.max(parseInt(req.query.days as string) || 30, 1), 365);
+      const report = await storage.funnel(days);
+      if (req.query.format === "json") {
+        return res.json(report);
+      }
+      res.type("html").send(renderStatsPage(report));
+    } catch (error) {
+      console.error("Failed to build funnel:", error);
+      res.status(500).json({ message: "Failed to build funnel" });
     }
   });
 

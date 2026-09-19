@@ -20,6 +20,7 @@ import {
   type GeocodeResult,
 } from "@/lib/map-utils";
 import { getUserId } from "@/lib/user-id";
+import { track } from "@/lib/track";
 import { POINT_TYPES, getPointType, TRANSPORT_CHOICES } from "@/lib/point-types";
 
 const formSchema = insertAttractionPointSchema.extend({
@@ -98,6 +99,9 @@ export function AttractionPointForm({ selectedPoint, onClearSelectedPoint, onPoi
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/attraction-points"] });
+      // Step 2 of the funnel: the visitor understood what to do and did it.
+      track("place_added", { type: form.getValues("type") });
+
       form.reset();
       setAddress("");
       setSuggestions([]);
