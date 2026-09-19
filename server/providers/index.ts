@@ -34,6 +34,10 @@ function withIsochroneCache(provider: RoutingProvider): RoutingProvider {
     isAvailable: () => provider.isAvailable(),
     travelTimeMinutes: (from, to, transport) =>
       provider.travelTimeMinutes(from, to, transport),
+    // Forwarded explicitly: this wrapper rebuilds the object field by field,
+    // so anything added to the contract and not listed here silently vanishes.
+    // The diagnostic must also bypass the cache to report live state.
+    selfTest: provider.selfTest ? (point) => provider.selfTest!(point) : undefined,
     async isochrone(request) {
       const key = isochroneKey(request);
       const cached = isochroneCache.get(key);

@@ -8,6 +8,7 @@ import { routingProvider } from "./providers";
 import { travelTimeMinutes } from "./travel-time";
 import { renderFeedbackPage } from "./feedback-page";
 import { renderStatsPage } from "./stats-page";
+import { renderDiagPage } from "./diag-page";
 import { insertEventSchema } from "@shared/schema";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import type { Request } from "express";
@@ -562,6 +563,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to reset funnel:", error);
       res.status(500).json({ message: "Failed to reset funnel" });
+    }
+  });
+
+  // Why are the zones approximate? Asks the routing provider live and reports
+  // what it said. Behind ADMIN_TOKEN: it makes real upstream calls, and the
+  // answers say more about our configuration than we want public.
+  app.get("/api/diag", async (req, res) => {
+    const adminToken = process.env.ADMIN_TOKEN;
+    if (!adminToken || req.query.token !== adminToken) {
+      return res.status(404).json({ message: "Not found" });
+    }
+    try {
+      // Moscow centre by default: a city we know is covered, so a failure
+      // there points at the key rather than at coverage.
+      const lat = Number.parseFloat(String(req.query.lat ?? "55.7558"));
+      const lng = Number.parseFloat(String(req.query.lng ?? "37.6176"));
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return res.status(400).json({ message: "Invalid coordinates" });
+      }
+
+      const checks = routingProvider.selfTest
+        ? await routingProvider.selfTest({ lat, lng })
+        : [
+            {
+              label: "Самопроверка",
+              ok: false,
+              detail: `Поставщик "${routingProvider.name}" её не поддерживает`,
+            },
+          ];
+
+      if (req.query.format === "json") {
+        return res.json({ provider: routingProvider.name, point: { lat, lng }, checks });
+      }
+      res.type("html").send(renderDiagPage(routingProvider.name, { lat, lng }, checks));
+    } catch (error) {
+      console.error("Diagnostics failed:", error);
+      res.status(500).json({ message: "Diagnostics failed" });
     }
   });
 
