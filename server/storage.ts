@@ -1,6 +1,6 @@
 import { eq, desc, gte, sql } from "drizzle-orm";
 import { attractionPoints, zones, feedback, events, EVENT_NAMES, type AttractionPoint, type InsertAttractionPoint, type Zone, type InsertZone, type Feedback, type InsertFeedback, type InsertEvent, type AppEvent } from "@shared/schema";
-import { db } from "./db";
+import { db, pool } from "./db";
 
 export interface IStorage {
   // Attraction Points
@@ -36,24 +36,135 @@ export interface FunnelReport {
   sinceDays: number;
   steps: Array<{ name: string; visitors: number; events: number }>;
   sources: Array<{ source: string; visitors: number }>;
+  metrics: ProductMetrics;
+}
+
+/**
+ * Product metrics derived from the same events. Every one of these is
+ * computable from what we already collect — nothing here is estimated.
+ * A null means "not enough data to divide by", which is different from zero
+ * and is rendered as such.
+ */
+export interface ProductMetrics {
+  visitors: number;
+  activationRate: number | null;
+  valueRate: number | null;
+  deepInterestRate: number | null;
+  bounceRate: number | null;
+  returnRate: number | null;
+  medianSecondsToValue: number | null;
+  avgPlacesPerActivated: number | null;
+  approximateShare: number | null;
+  feedback: {
+    total: number;
+    likes: number;
+    dislikes: number;
+    likeShare: number | null;
+    responseRate: number | null;
+  };
+}
+
+/** One visitor's activity in the period, however it was gathered. */
+export interface VisitorRow {
+  firstOpen: Date | null;
+  firstZone: Date | null;
+  places: number;
+  checks: number;
+  zones: number;
+  exactZones: number;
+  activeDays: number;
+}
+
+function share(part: number, whole: number): number | null {
+  return whole > 0 ? part / whole : null;
+}
+
+function median(values: number[]): number | null {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+}
+
+// Shared by both storage backends so the two can't drift apart.
+export function computeMetrics(
+  rows: VisitorRow[],
+  feedbackCounts: { likes: number; dislikes: number },
+): ProductMetrics {
+  const visitors = rows.length;
+  const activated = rows.filter((r) => r.places > 0);
+  const reachedValue = rows.filter((r) => r.zones > 0);
+  const deep = rows.filter((r) => r.checks > 0);
+  // Opened and did nothing else — the clearest sign the first screen failed.
+  const bounced = rows.filter((r) => r.places === 0 && r.zones === 0 && r.checks === 0);
+  const returned = rows.filter((r) => r.activeDays > 1);
+
+  // How long it takes to get the answer, for those who got it.
+  const secondsToValue = rows
+    .filter((r) => r.firstOpen && r.firstZone && r.firstZone >= r.firstOpen)
+    .map((r) => Math.round((r.firstZone!.getTime() - r.firstOpen!.getTime()) / 1000));
+
+  const totalZones = rows.reduce((sum, r) => sum + r.zones, 0);
+  const exactZones = rows.reduce((sum, r) => sum + r.exactZones, 0);
+  const totalPlaces = activated.reduce((sum, r) => sum + r.places, 0);
+
+  const feedbackTotal = feedbackCounts.likes + feedbackCounts.dislikes;
+
+  return {
+    visitors,
+    activationRate: share(activated.length, visitors),
+    valueRate: share(reachedValue.length, visitors),
+    deepInterestRate: share(deep.length, visitors),
+    bounceRate: share(bounced.length, visitors),
+    returnRate: share(returned.length, visitors),
+    medianSecondsToValue: median(secondsToValue),
+    avgPlacesPerActivated: activated.length
+      ? Math.round((totalPlaces / activated.length) * 10) / 10
+      : null,
+    approximateShare: share(totalZones - exactZones, totalZones),
+    feedback: {
+      total: feedbackTotal,
+      likes: feedbackCounts.likes,
+      dislikes: feedbackCounts.dislikes,
+      likeShare: share(feedbackCounts.likes, feedbackTotal),
+      responseRate: share(feedbackTotal, reachedValue.length),
+    },
+  };
 }
 
 // Counting people, not clicks: one visitor who adds four places is one visitor
 // at the "added a place" step. Clicks are reported alongside, since the gap
 // between the two is itself informative.
-function summarise(rows: Array<Pick<AppEvent, "userId" | "name" | "source">>): Omit<FunnelReport, "sinceDays"> {
+export const DIRECT_SOURCE = "прямой заход";
+
+function summarise(
+  rows: Array<Pick<AppEvent, "userId" | "name" | "source" | "createdAt">>,
+): Pick<FunnelReport, "steps" | "sources"> {
   const byStep = new Map<string, Set<string>>();
   const counts = new Map<string, number>();
-  const bySource = new Map<string, Set<string>>();
+  // Each visitor is attributed to where they first came from. Counting every
+  // source a visitor's events carry would list the same person twice and make
+  // the column add up to more than the number of visitors.
+  const firstTouch = new Map<string, { source: string | null; at: Date }>();
 
   for (const row of rows) {
     if (!byStep.has(row.name)) byStep.set(row.name, new Set());
     byStep.get(row.name)!.add(row.userId);
     counts.set(row.name, (counts.get(row.name) ?? 0) + 1);
 
-    const source = row.source || "прямой заход";
-    if (!bySource.has(source)) bySource.set(source, new Set());
-    bySource.get(source)!.add(row.userId);
+    const seen = firstTouch.get(row.userId);
+    const better =
+      !seen ||
+      // A real source beats "direct", and otherwise the earlier event wins.
+      (!seen.source && !!row.source) ||
+      (!!seen.source === !!row.source && row.createdAt < seen.at);
+    if (better) firstTouch.set(row.userId, { source: row.source, at: row.createdAt });
+  }
+
+  const bySource = new Map<string, number>();
+  for (const { source } of Array.from(firstTouch.values())) {
+    const key = source || DIRECT_SOURCE;
+    bySource.set(key, (bySource.get(key) ?? 0) + 1);
   }
 
   return {
@@ -63,7 +174,7 @@ function summarise(rows: Array<Pick<AppEvent, "userId" | "name" | "source">>): O
       events: counts.get(name) ?? 0,
     })),
     sources: Array.from(bySource.entries())
-      .map(([source, ids]) => ({ source, visitors: ids.size }))
+      .map(([source, visitors]) => ({ source, visitors }))
       .sort((a, b) => b.visitors - a.visitors),
   };
 }
@@ -196,10 +307,49 @@ export class MemStorage implements IStorage {
 
   async funnel(sinceDays: number): Promise<FunnelReport> {
     const cutoff = Date.now() - sinceDays * 24 * 60 * 60 * 1000;
-    const rows = this.events
-      .filter((e) => e.createdAt.getTime() >= cutoff)
-      .map((e) => ({ userId: e.userId, name: e.name, source: e.source ?? null }));
-    return { sinceDays, ...summarise(rows) };
+    const recent = this.events.filter((e) => e.createdAt.getTime() >= cutoff);
+    const rows = recent.map((e) => ({
+      userId: e.userId,
+      name: e.name,
+      source: e.source ?? null,
+      createdAt: e.createdAt,
+    }));
+
+    const perVisitor = new Map<string, VisitorRow & { days: Set<string> }>();
+    for (const e of recent) {
+      let row = perVisitor.get(e.userId);
+      if (!row) {
+        row = {
+          firstOpen: null, firstZone: null, places: 0, checks: 0,
+          zones: 0, exactZones: 0, activeDays: 0, days: new Set(),
+        };
+        perVisitor.set(e.userId, row);
+      }
+      row.days.add(e.createdAt.toISOString().slice(0, 10));
+      if (e.name === "open" && (!row.firstOpen || e.createdAt < row.firstOpen)) {
+        row.firstOpen = e.createdAt;
+      }
+      if (e.name === "place_added") row.places += 1;
+      if (e.name === "address_checked") row.checks += 1;
+      if (e.name === "zone_shown") {
+        row.zones += 1;
+        if (e.props?.includes('"mode":"isochrone"')) row.exactZones += 1;
+        if (!row.firstZone || e.createdAt < row.firstZone) row.firstZone = e.createdAt;
+      }
+    }
+    const visitors = Array.from(perVisitor.values()).map((r) => ({
+      ...r,
+      activeDays: r.days.size,
+    }));
+
+    const since = new Date(cutoff);
+    const ratings = Array.from(this.feedback.values()).filter((f) => f.createdAt >= since);
+    const metrics = computeMetrics(visitors, {
+      likes: ratings.filter((f) => f.rating === "like").length,
+      dislikes: ratings.filter((f) => f.rating === "dislike").length,
+    });
+
+    return { sinceDays, ...summarise(rows), metrics };
   }
 
   async clearEvents(): Promise<number> {
@@ -312,16 +462,73 @@ export class DbStorage implements IStorage {
       .where(gte(events.createdAt, cutoff))
       .groupBy(events.name);
 
-    const sources = await db
-      .select({
-        source: sql<string>`coalesce(${events.source}, 'прямой заход')`,
-        visitors: sql<number>`count(distinct ${events.userId})`.mapWith(Number),
-      })
-      .from(events)
-      .where(gte(events.createdAt, cutoff))
-      .groupBy(sql`coalesce(${events.source}, 'прямой заход')`)
-      .orderBy(desc(sql`count(distinct ${events.userId})`))
-      .limit(20);
+    // One row per visitor, taken from where they first arrived, so the column
+    // adds up to the number of visitors instead of double-counting anyone
+    // whose later events carry a different tag.
+    const sourceRows = await pool.query<{ source: string; visitors: string }>(
+      `SELECT coalesce(source, $2) AS source, count(*) AS visitors
+         FROM (
+           SELECT DISTINCT ON (user_id) user_id, source
+             FROM events
+            WHERE created_at >= $1
+            ORDER BY user_id, (source IS NULL), created_at
+         ) AS first_touch
+        GROUP BY 1
+        ORDER BY 2 DESC
+        LIMIT 20`,
+      [cutoff, DIRECT_SOURCE],
+    );
+    const sources = sourceRows.rows.map((r) => ({
+      source: r.source,
+      visitors: Number(r.visitors),
+    }));
+
+    // One row per visitor, aggregated by the database. `props LIKE` rather
+    // than a JSON cast: a malformed value would make the cast throw and take
+    // the whole report down, and this only needs to spot one known marker.
+    const visitorRows = await pool.query<{
+      first_open: Date | null;
+      first_zone: Date | null;
+      places: string;
+      checks: string;
+      zones: string;
+      exact_zones: string;
+      active_days: string;
+    }>(
+      `SELECT
+         min(created_at) FILTER (WHERE name = 'open')       AS first_open,
+         min(created_at) FILTER (WHERE name = 'zone_shown') AS first_zone,
+         count(*) FILTER (WHERE name = 'place_added')       AS places,
+         count(*) FILTER (WHERE name = 'address_checked')   AS checks,
+         count(*) FILTER (WHERE name = 'zone_shown')        AS zones,
+         count(*) FILTER (WHERE name = 'zone_shown'
+                          AND props LIKE '%"mode":"isochrone"%') AS exact_zones,
+         count(DISTINCT created_at::date)                   AS active_days
+       FROM events
+       WHERE created_at >= $1
+       GROUP BY user_id`,
+      [cutoff],
+    );
+
+    const ratings = await pool.query<{ rating: string; count: string }>(
+      `SELECT rating, count(*) AS count FROM feedback WHERE created_at >= $1 GROUP BY rating`,
+      [cutoff],
+    );
+    const ratingCount = (name: string) =>
+      Number(ratings.rows.find((r) => r.rating === name)?.count ?? 0);
+
+    const metrics = computeMetrics(
+      visitorRows.rows.map((r) => ({
+        firstOpen: r.first_open,
+        firstZone: r.first_zone,
+        places: Number(r.places),
+        checks: Number(r.checks),
+        zones: Number(r.zones),
+        exactZones: Number(r.exact_zones),
+        activeDays: Number(r.active_days),
+      })),
+      { likes: ratingCount("like"), dislikes: ratingCount("dislike") },
+    );
 
     const byName = new Map(steps.map((s) => [s.name, s]));
     return {
@@ -332,6 +539,7 @@ export class DbStorage implements IStorage {
         events: byName.get(name)?.events ?? 0,
       })),
       sources,
+      metrics,
     };
   }
 

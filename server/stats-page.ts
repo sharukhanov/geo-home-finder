@@ -4,7 +4,7 @@
 // many visitors reached each step and how many fell away between them — the
 // drop-offs are the finding, not the totals.
 
-import type { FunnelReport } from "./storage";
+import type { FunnelReport, ProductMetrics } from "./storage";
 
 const STEP_LABELS: Record<string, { title: string; hint: string }> = {
   open: { title: "Открыли сайт", hint: "дошли по ссылке и страница загрузилась" },
@@ -33,6 +33,98 @@ function toJsLiteral(value: string): string {
 function pct(part: number, whole: number): string {
   if (!whole) return "—";
   return `${Math.round((part / whole) * 100)}%`;
+}
+
+function asPercent(value: number | null): string {
+  return value === null ? "—" : `${Math.round(value * 100)}%`;
+}
+
+function asDuration(seconds: number | null): string {
+  if (seconds === null) return "—";
+  if (seconds < 90) return `${seconds} сек`;
+  return `${Math.round(seconds / 60)} мин`;
+}
+
+// Each card states the number, what it means, and — where it matters — what
+// counts as good. A metric nobody can act on is just decoration.
+function renderMetrics(m: ProductMetrics): string {
+  const cards: Array<{ label: string; value: string; hint: string; warn?: boolean }> = [
+    {
+      label: "Активация",
+      value: asPercent(m.activationRate),
+      hint: "из зашедших добавили хотя бы одно место — поняли, что от них требуется",
+    },
+    {
+      label: "Дошли до ценности",
+      value: asPercent(m.valueRate),
+      hint: "увидели зону, то есть получили ответ, ради которого пришли",
+    },
+    {
+      label: "Глубокий интерес",
+      value: asPercent(m.deepInterestRate),
+      hint: "стали проверять конкретный адрес — самый сильный сигнал спроса",
+    },
+    {
+      label: "Ушли сразу",
+      value: asPercent(m.bounceRate),
+      hint: "открыли и не сделали ничего. Высокое значение — проблема первого экрана, а не идеи",
+      warn: m.bounceRate !== null && m.bounceRate > 0.6,
+    },
+    {
+      label: "Вернулись",
+      value: asPercent(m.returnRate),
+      hint: "заходили в разные дни. Для разового инструмента это сильный результат",
+    },
+    {
+      label: "Время до ответа",
+      value: asDuration(m.medianSecondsToValue),
+      hint: "медиана от открытия до первой зоны. Дольше пары минут — путь слишком длинный",
+    },
+    {
+      label: "Мест на человека",
+      value: m.avgPlacesPerActivated === null ? "—" : String(m.avgPlacesPerActivated),
+      hint: "среди тех, кто начал. Меньше двух — сервис используют не по назначению",
+    },
+    {
+      label: "Считали приблизительно",
+      value: asPercent(m.approximateShare),
+      hint: "доля расчётов без 2ГИС. Такие зоны заметно хуже — при высоком значении выводы о продукте делать рано",
+      warn: m.approximateShare !== null && m.approximateShare > 0.2,
+    },
+  ];
+
+  const tiles = cards
+    .map(
+      (c) => `
+      <div class="metric${c.warn ? " warn" : ""}">
+        <div class="mlabel">${escapeHtml(c.label)}</div>
+        <div class="mvalue">${escapeHtml(c.value)}</div>
+        <div class="hint">${escapeHtml(c.hint)}</div>
+      </div>`,
+    )
+    .join("");
+
+  const f = m.feedback;
+  const rating = `
+    <div class="metric wide">
+      <div class="mlabel">Оценки</div>
+      <div class="mvalue">${
+        f.total === 0
+          ? '<span class="sub">пока никто не оценивал</span>'
+          : `${asPercent(f.likeShare)} <span class="sub">довольны</span>`
+      }</div>
+      <div class="hint">
+        ${
+          f.total === 0
+            ? "Кнопки «нравится / не нравится» появляются после расчёта зоны."
+            : `${f.likes} 👍 и ${f.dislikes} 👎 из ${f.total} оценок.
+               Оценку оставили ${asPercent(f.responseRate)} тех, кто увидел зону.
+               ${f.total < 10 ? "<b>Оценок пока слишком мало, чтобы делать выводы.</b>" : ""}`
+        }
+      </div>
+    </div>`;
+
+  return `<div class="metrics">${tiles}${rating}</div>`;
 }
 
 const PERIODS: Array<{ days: number; label: string }> = [
@@ -119,6 +211,13 @@ export function renderStatsPage(report: FunnelReport, token: string): string {
   .num { text-align: right; font-weight: 600; width: 90px; }
   footer { margin-top: 36px; font-size: 13px; color: #64748b;
     border-top: 1px solid #e2e8f0; padding-top: 20px; }
+  .metrics { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+  .metric { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 16px; }
+  .metric.warn { border-color: #fcd34d; background: #fffbeb; }
+  .metric.wide { grid-column: 1 / -1; }
+  .mlabel { font-size: 13px; color: #64748b; }
+  .mvalue { font-size: 26px; font-weight: 700; margin: 2px 0 4px; }
+  .sub { font-size: 14px; font-weight: 500; color: #64748b; }
   .periods { display: flex; gap: 8px; margin: 16px 0 0; flex-wrap: wrap; }
   .period { font-size: 14px; text-decoration: none; color: #334155;
     background: #fff; border: 1px solid #e2e8f0; border-radius: 999px;
@@ -130,6 +229,8 @@ export function renderStatsPage(report: FunnelReport, token: string): string {
   #reset:disabled { opacity: .6; cursor: default; }
   @media (prefers-color-scheme: dark) {
     body { background: #0b1220; color: #e2e8f0; }
+    .metric { background: #131c2e; border-color: #1e293b; }
+    .metric.warn { background: #2a2413; border-color: #6b5a1e; }
     .step, table, .period { background: #131c2e; border-color: #1e293b; color: #cbd5e1; }
     .period.on { background: #0a66ff; border-color: #0a66ff; color: #fff; }
     footer { border-color: #1e293b; }
@@ -145,6 +246,9 @@ export function renderStatsPage(report: FunnelReport, token: string): string {
 
   <h2>Путь посетителя</h2>
   ${rows}
+
+  <h2>Продуктовые метрики</h2>
+  ${renderMetrics(report.metrics)}
 
   <h2>Откуда приходят</h2>
   <table>${sources}</table>
