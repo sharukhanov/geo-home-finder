@@ -45,50 +45,66 @@ function asDuration(seconds: number | null): string {
   return `${Math.round(seconds / 60)} мин`;
 }
 
-// Each card states the number, what it means, and — where it matters — what
-// counts as good. A metric nobody can act on is just decoration.
+// Standard product vocabulary for the names, so these travel to a deck or a
+// conversation with an investor unchanged, with the definition spelled out in
+// terms of our own events — a borrowed name with a different denominator is
+// worse than no name at all.
 function renderMetrics(m: ProductMetrics): string {
-  const cards: Array<{ label: string; value: string; hint: string; warn?: boolean }> = [
+  const cards: Array<{
+    name: string;
+    value: string;
+    what: string;
+    formula: string;
+    warn?: boolean;
+  }> = [
     {
-      label: "Активация",
+      name: "Activation Rate",
       value: asPercent(m.activationRate),
-      hint: "из зашедших добавили хотя бы одно место — поняли, что от них требуется",
+      what: "Активация. Доля пришедших, кто добавил хотя бы одно место, то есть понял, что от него требуется.",
+      formula: "добавили место ÷ открыли сайт",
     },
     {
-      label: "Дошли до ценности",
+      name: "Aha-Moment Rate",
       value: asPercent(m.valueRate),
-      hint: "увидели зону, то есть получили ответ, ради которого пришли",
+      what: "Дошли до ценности. Доля пришедших, кто увидел зону — получил ответ, ради которого пришёл. Главная цифра сервиса.",
+      formula: "увидели зону ÷ открыли сайт",
     },
     {
-      label: "Глубокий интерес",
+      name: "High-Intent Rate",
       value: asPercent(m.deepInterestRate),
-      hint: "стали проверять конкретный адрес — самый сильный сигнал спроса",
+      what: "Глубокий интерес. Доля пришедших, кто стал проверять конкретный адрес. Сильнейший сигнал спроса, доступный без денег.",
+      formula: "проверили адрес ÷ открыли сайт",
     },
     {
-      label: "Ушли сразу",
+      name: "Bounce Rate",
       value: asPercent(m.bounceRate),
-      hint: "открыли и не сделали ничего. Высокое значение — проблема первого экрана, а не идеи",
+      what: "Отказы. Открыли и не сделали ничего. Высокое значение — проблема первого экрана, а не идеи.",
+      formula: "ни одного действия после открытия ÷ открыли сайт",
       warn: m.bounceRate !== null && m.bounceRate > 0.6,
     },
     {
-      label: "Вернулись",
+      name: "Return Rate",
       value: asPercent(m.returnRate),
-      hint: "заходили в разные дни. Для разового инструмента это сильный результат",
+      what: "Возвраты. Заходили в разные календарные дни. Для инструмента разового пользования даже небольшая цифра — сильный результат.",
+      formula: "были активны более чем в один день ÷ все посетители",
     },
     {
-      label: "Время до ответа",
+      name: "Time to Value",
       value: asDuration(m.medianSecondsToValue),
-      hint: "медиана от открытия до первой зоны. Дольше пары минут — путь слишком длинный",
+      what: "Время до ценности. Сколько проходит от открытия до первой зоны. Берётся медиана, а не среднее: один зависший посетитель не должен портить картину.",
+      formula: "медиана(первая зона − открытие сайта)",
     },
     {
-      label: "Мест на человека",
+      name: "Depth of Use",
       value: m.avgPlacesPerActivated === null ? "—" : String(m.avgPlacesPerActivated),
-      hint: "среди тех, кто начал. Меньше двух — сервис используют не по назначению",
+      what: "Глубина использования. Сколько мест добавляет тот, кто начал. Меньше двух — сервисом пользуются не по назначению: вся идея в пересечении нескольких точек.",
+      formula: "всего мест ÷ посетители, добавившие хотя бы одно",
     },
     {
-      label: "Считали приблизительно",
+      name: "Fallback Rate",
       value: asPercent(m.approximateShare),
-      hint: "доля расчётов без 2ГИС. Такие зоны заметно хуже — при высоком значении выводы о продукте делать рано",
+      what: "Приблизительные расчёты. Доля зон, посчитанных без 2ГИС. Высокое значение означает не плохой продукт, а отсутствие данных о продукте: люди видели не тот результат, который вы обещаете.",
+      formula: "расчёты без 2ГИС ÷ все расчёты",
       warn: m.approximateShare !== null && m.approximateShare > 0.2,
     },
   ];
@@ -97,9 +113,10 @@ function renderMetrics(m: ProductMetrics): string {
     .map(
       (c) => `
       <div class="metric${c.warn ? " warn" : ""}">
-        <div class="mlabel">${escapeHtml(c.label)}</div>
+        <div class="mlabel">${escapeHtml(c.name)}</div>
         <div class="mvalue">${escapeHtml(c.value)}</div>
-        <div class="hint">${escapeHtml(c.hint)}</div>
+        <div class="hint">${escapeHtml(c.what)}</div>
+        <div class="formula">${escapeHtml(c.formula)}</div>
       </div>`,
     )
     .join("");
@@ -107,7 +124,7 @@ function renderMetrics(m: ProductMetrics): string {
   const f = m.feedback;
   const rating = `
     <div class="metric wide">
-      <div class="mlabel">Оценки</div>
+      <div class="mlabel">Satisfaction Score</div>
       <div class="mvalue">${
         f.total === 0
           ? '<span class="sub">пока никто не оценивал</span>'
@@ -116,12 +133,13 @@ function renderMetrics(m: ProductMetrics): string {
       <div class="hint">
         ${
           f.total === 0
-            ? "Кнопки «нравится / не нравится» появляются после расчёта зоны."
-            : `${f.likes} 👍 и ${f.dislikes} 👎 из ${f.total} оценок.
-               Оценку оставили ${asPercent(f.responseRate)} тех, кто увидел зону.
+            ? "Удовлетворённость. Кнопки «нравится / не нравится» появляются после расчёта зоны."
+            : `Удовлетворённость. ${f.likes} 👍 и ${f.dislikes} 👎 из ${f.total} оценок.
+               Feedback Response Rate — ${asPercent(f.responseRate)}: столько из увидевших зону вообще оценили результат.
                ${f.total < 10 ? "<b>Оценок пока слишком мало, чтобы делать выводы.</b>" : ""}`
         }
       </div>
+      <div class="formula">👍 ÷ (👍 + 👎) · охват: все оценки ÷ увидели зону</div>
     </div>`;
 
   return `<div class="metrics">${tiles}${rating}</div>`;
@@ -217,6 +235,11 @@ export function renderStatsPage(report: FunnelReport, token: string): string {
   .metric.wide { grid-column: 1 / -1; }
   .mlabel { font-size: 13px; color: #64748b; }
   .mvalue { font-size: 26px; font-weight: 700; margin: 2px 0 4px; }
+  .mlabel { letter-spacing: .2px; }
+  .formula { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e2e8f0;
+    font-size: 12px; color: #94a3b8; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .note { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+    padding: 14px 16px; font-size: 13px; color: #64748b; margin-top: 20px; }
   .sub { font-size: 14px; font-weight: 500; color: #64748b; }
   .periods { display: flex; gap: 8px; margin: 16px 0 0; flex-wrap: wrap; }
   .period { font-size: 14px; text-decoration: none; color: #334155;
@@ -229,7 +252,8 @@ export function renderStatsPage(report: FunnelReport, token: string): string {
   #reset:disabled { opacity: .6; cursor: default; }
   @media (prefers-color-scheme: dark) {
     body { background: #0b1220; color: #e2e8f0; }
-    .metric { background: #131c2e; border-color: #1e293b; }
+    .metric, .note { background: #131c2e; border-color: #1e293b; }
+    .formula { border-color: #1e293b; }
     .metric.warn { background: #2a2413; border-color: #6b5a1e; }
     .step, table, .period { background: #131c2e; border-color: #1e293b; color: #cbd5e1; }
     .period.on { background: #0a66ff; border-color: #0a66ff; color: #fff; }
@@ -249,6 +273,15 @@ export function renderStatsPage(report: FunnelReport, token: string): string {
 
   <h2>Продуктовые метрики</h2>
   ${renderMetrics(report.metrics)}
+
+  <div class="note">
+    <b>Чего здесь нет и почему.</b>
+    <b>NPS</b> требует отдельного вопроса «насколько вероятно, что порекомендуете» со шкалой 0–10;
+    из двух кнопок «нравится / не нравится» его не восстановить, а назвать долю лайков словом NPS —
+    значит получить цифру, которую нельзя сравнивать с чужими. <b>CTR</b> — это клики ÷ показы,
+    а показы знает только соцсеть: возьмите охват поста и поделите на него число из строки
+    нужного источника ниже.
+  </div>
 
   <h2>Откуда приходят</h2>
   <table>${sources}</table>
