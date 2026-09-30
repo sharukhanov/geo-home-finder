@@ -1,0 +1,24 @@
+# Deployment configuration for Amvera Cloud.
+#
+# It lives in the repository rather than in Amvera's own copy so that the
+# hosting setup is versioned with the code it deploys — and because letting
+# the panel write it would commit to Amvera's repository instead of this one,
+# leaving the two to be merged by hand.
+
+meta:
+  environment: docker
+  toolchain:
+    name: docker
+
+build:
+  # At the repo root; the image builds and starts the app on its own.
+  dockerfile: Dockerfile
+
+run:
+  # Amvera defaults this to 80. The image listens on 8080, and a mismatch here
+  # is silent: the build succeeds, the app starts, and every request reaches a
+  # port nothing is bound to. That exact mismatch took the Railway deploy down.
+  containerPort: 8080
+  # Persistent folder, kept at the default. Unused today — data lives in
+  # PostgreSQL — but it is where a file-based store would go.
+  persistenceMount: /data
