@@ -37,4 +37,10 @@ COPY --from=build /app/package.json ./package.json
 ENV PORT=8080
 EXPOSE 8080
 
+# Where to keep the JSON snapshot when no DATABASE_URL is configured. /data is
+# the persistent mount amvera.yml declares; a host that mounts nothing there
+# gets a folder inside the container instead, which the startup log names so
+# the difference is visible. Set DATABASE_URL and this is ignored.
+ENV DATA_DIR=/data
+
 CMD ["node", "dist/index.js"]
