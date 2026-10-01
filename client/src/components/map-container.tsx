@@ -17,15 +17,15 @@ import type { AttractionPoint, Zone } from "@shared/schema";
 import type { IsochroneFeature } from "@/lib/geo-types";
 import { cn } from "@/lib/utils";
 
-// Esri's topographic basemap: soft colours, buildings and greenery visible,
-// and quiet enough that a coloured zone on top still reads. No key, no
-// account. It is what this audience can actually reach — the vector basemap
-// below loads on desktop and not on Russian mobile networks, and a map that
-// differs by device is worse than a plain one that does not.
-const RASTER_TILE_URL =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}";
+// OpenStreetMap. Not the prettiest option tried, but the only free one whose
+// Russian data is current: it is surveyed by people who live here, while the
+// commercial basemaps carry a years-old picture of Moscow. A good-looking map
+// that shows the wrong city is no use for choosing where to live.
+//
+// CSS in index.css mutes these tiles so the coloured zones read on top.
+const RASTER_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const RASTER_ATTRIBUTION =
-  'Карта © <a href="https://www.esri.com" target="_blank" rel="noreferrer">Esri</a> и партнёры';
+  '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>';
 
 // Opt-in, by setting VITE_MAP_VECTOR_STYLE to a style URL. OpenFreeMap's
 // "liberty" is sharper and carries Russian-only labels, but its server is not
