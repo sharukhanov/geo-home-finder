@@ -69,8 +69,12 @@
 }
 
 /* Mute the basemap so the coloured zones read clearly on top of it.
-   Only the tile pane is filtered — zones, markers and popups are untouched. */
-.leaflet-tile-pane {
+   Zones, markers and popups are untouched.
+
+   Scoped to raster tiles, which is the fallback basemap. The vector basemap
+   renders into a canvas in the same pane but is already muted by its own
+   design, and filtering a canvas every frame costs real work on a phone. */
+.leaflet-tile-pane .leaflet-tile-container {
   filter: saturate(0.45) brightness(1.06) contrast(0.92);
 }
 
