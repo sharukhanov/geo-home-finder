@@ -45,12 +45,12 @@ export function Onboarding({ open, onClose, onShowMethodology }: OnboardingProps
         <img
           src="/onboarding-result.jpg"
           width={1720}
-          height={1200}
+          height={860}
           alt="Карта Москвы: зелёным отмечены районы, из которых и до работы в Сити, и до МГУ можно доехать на метро за 40 минут."
-          // Capped against the viewport, not just the dialog: on a short
-          // screen the full-ratio picture pushed the button below the fold,
-          // and a dialog that scrolls does not look like one that scrolls.
-          className="w-full aspect-[43/30] max-h-[28vh] object-cover bg-slate-100"
+          // Shown at the ratio it was captured at, so nothing is ever cropped.
+          // A taller picture trimmed to fit cut off the top of the map, and
+          // with it one of the two places the caption is about.
+          className="w-full aspect-[2/1] object-cover bg-slate-100"
         />
 
         <div className="px-6 pt-4 text-center">
