@@ -13,7 +13,7 @@ interface ControlPanelProps {
   onPointSelected: (lat: number, lng: number) => void;
   /** A place was saved — the caller decides whether to get out of the way. */
   onPlaceAdded: () => void;
-  onShowMethodology: () => void;
+  onShowIntro: () => void;
 }
 
 export function ControlPanel({
@@ -22,7 +22,7 @@ export function ControlPanel({
   onClearSelectedPoint,
   onPointSelected,
   onPlaceAdded,
-  onShowMethodology,
+  onShowIntro,
 }: ControlPanelProps) {
   const hasPoints = attractionPoints.length > 0;
   // Once the user has places, the form collapses into a single button.
@@ -49,7 +49,10 @@ export function ControlPanel({
       <div
         className="flex-1 overflow-y-auto px-6 py-4 space-y-4"
       >
-        {/* Hint for first-time users, with the single explainer entry point. */}
+        {/* Hint for first-time users. The button reopens the welcome screen —
+            it shows the picture of a finished result, which answers "what is
+            this" far better than the methodology text does, and from there
+            the methodology is one tap away. */}
         {!hasPoints && (
           <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-slate-700 space-y-2">
             <div>
@@ -60,10 +63,10 @@ export function ControlPanel({
               variant="outline"
               size="sm"
               className="w-full bg-white"
-              onClick={onShowMethodology}
+              onClick={onShowIntro}
             >
               <HelpCircle className="w-4 h-4 mr-2 text-blue-600" />
-              Как это считается
+              Как это работает
             </Button>
           </div>
         )}

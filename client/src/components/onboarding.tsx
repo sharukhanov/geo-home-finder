@@ -10,9 +10,17 @@ interface OnboardingProps {
 // Three lines, not three paragraphs. The picture above carries the idea; these
 // only say what the visitor has to do to get one of their own.
 const STEPS = [
-  { emoji: "📍", text: "Отметьте места, куда будете ездить" },
-  { emoji: "🚇", text: "Скажите, как добираетесь и сколько готовы ехать" },
-  { emoji: "🟢", text: "Получите районы, откуда успеваете во все" },
+  { emoji: "📍", text: "Отметьте места, куда планируете добираться" },
+  {
+    emoji: "🚇",
+    text: "Скажите, как планируете добираться (общественный транспорт, пешком "
+      + "или на личном авто) и сколько времени готовы тратить на дорогу",
+  },
+  {
+    emoji: "🟢",
+    text: "Получите область, откуда успеваете во все выбранные места исходя "
+      + "из ваших предпочтений по времени",
+  },
 ];
 
 /**
@@ -26,7 +34,12 @@ const STEPS = [
 export function Onboarding({ open, onClose, onShowMethodology }: OnboardingProps) {
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg p-0 max-h-[90vh] overflow-y-auto">
+      {/* The buttons sit outside the scrolling area so they are always on
+          screen. Letting the whole dialog scroll instead meant that on a short
+          screen the picture pushed "Понятно, начать" below the fold, and a
+          dialog that scrolls does not look like one that scrolls. */}
+      <DialogContent className="max-w-lg p-0 max-h-[90vh] overflow-hidden flex flex-col gap-0">
+        <div className="overflow-y-auto">
         {/* Dimensions are set so the dialog does not resize under the reader
             when the picture arrives. */}
         <img
@@ -34,10 +47,13 @@ export function Onboarding({ open, onClose, onShowMethodology }: OnboardingProps
           width={1720}
           height={1200}
           alt="Карта Москвы: зелёным отмечены районы, откуда можно вовремя добраться и до работы, и до учёбы."
-          className="w-full aspect-[43/30] object-cover bg-slate-100"
+          // Capped against the viewport, not just the dialog: on a short
+          // screen the full-ratio picture pushed the button below the fold,
+          // and a dialog that scrolls does not look like one that scrolls.
+          className="w-full aspect-[43/30] max-h-[32vh] object-cover bg-slate-100"
         />
 
-        <div className="px-6 pt-5 text-center">
+        <div className="px-6 pt-4 text-center">
           {/* The heading doubles as the dialog's accessible name, so screen
               readers announce what just opened instead of "dialog". */}
           <DialogTitle className="text-xl font-bold text-slate-900">
@@ -49,9 +65,9 @@ export function Onboarding({ open, onClose, onShowMethodology }: OnboardingProps
           </p>
         </div>
 
-        <div className="px-6 pt-5 space-y-2.5">
+        <div className="px-6 pt-4 space-y-2">
           {STEPS.map((step, i) => (
-            <div key={step.text} className="flex items-center gap-3 text-sm">
+            <div key={step.text} className="flex items-start gap-3 text-sm">
               <div className="text-xl flex-none">{step.emoji}</div>
               <div className="text-slate-700">
                 <span className="text-slate-400 tabular-nums">{i + 1}.</span>{" "}
@@ -59,9 +75,11 @@ export function Onboarding({ open, onClose, onShowMethodology }: OnboardingProps
               </div>
             </div>
           ))}
+          </div>
+
         </div>
 
-        <div className="p-6 pt-5 space-y-2">
+        <div className="p-6 pt-4 space-y-2 border-t border-slate-100 bg-white">
           <Button className="w-full" size="lg" onClick={onClose}>
             Понятно, начать
           </Button>
