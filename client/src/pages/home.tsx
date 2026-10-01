@@ -252,7 +252,7 @@ export default function Home() {
             // sheet steps aside instead of covering the thing it just
             // produced. Harmless on desktop, where the panel is a sidebar.
             onPlaceAdded={() => setIsPanelOpen(false)}
-            onShowMethodology={() => setShowMethodology(true)}
+            onShowIntro={() => setShowOnboarding(true)}
           />
         </div>
       </div>
