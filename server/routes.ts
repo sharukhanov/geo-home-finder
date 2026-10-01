@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage } from "./storage-instance";
 import { insertAttractionPointSchema, insertZoneSchema } from "@shared/schema";
 import { searchAddress, reverseGeocode, findDistrictsInPolygon } from "./geocode";
 import { computeOptimalArea } from "./isochrone";

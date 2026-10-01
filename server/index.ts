@@ -65,13 +65,12 @@ app.use((req, res, next) => {
         err,
       );
     }
-  } else {
-    // Silently serving from memory looks fine until a restart wipes everyone's
-    // places, so say it loudly rather than in passing.
-    console.warn(
-      "!!! DATABASE_URL is not set — storing data IN MEMORY. Everything is lost on restart.",
-    );
+  } else if (process.env.DATA_DIR) {
+    // No database, but the host gave us a folder that survives restarts, so the
+    // JSON snapshot in storage-instance.ts takes over. It logs what it loaded.
+    log(`no DATABASE_URL — storing data in ${process.env.DATA_DIR}`);
   }
+  // With neither, storage-instance.ts already warned about memory-only mode.
 
   const server = await registerRoutes(app);
 

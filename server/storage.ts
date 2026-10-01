@@ -179,14 +179,21 @@ function summarise(
   };
 }
 
+// In-memory storage. Also the base class for the file-backed storage, which
+// only adds saving and loading — so the fields and the mutation hook below are
+// protected rather than private, and every method that changes something calls
+// `onChange()` on its way out.
 export class MemStorage implements IStorage {
-  private attractionPoints: Map<number, AttractionPoint>;
-  private zones: Map<number, Zone>;
-  private feedback: Map<number, Feedback>;
-  private events: Array<InsertEvent & { createdAt: Date }> = [];
-  private currentPointId: number;
-  private currentZoneId: number;
-  private currentFeedbackId: number;
+  protected attractionPoints: Map<number, AttractionPoint>;
+  protected zones: Map<number, Zone>;
+  protected feedback: Map<number, Feedback>;
+  protected events: Array<InsertEvent & { createdAt: Date }> = [];
+  protected currentPointId: number;
+  protected currentZoneId: number;
+  protected currentFeedbackId: number;
+
+  /** Called after anything changes. A no-op here; FileStorage saves. */
+  protected onChange(): void {}
 
   constructor() {
     this.attractionPoints = new Map();
@@ -217,6 +224,7 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
     };
     this.attractionPoints.set(id, point);
+    this.onChange();
     return point;
   }
 
@@ -228,11 +236,14 @@ export class MemStorage implements IStorage {
     if (!existing) return undefined;
     const updated = { ...existing, ...patch };
     this.attractionPoints.set(id, updated);
+    this.onChange();
     return updated;
   }
 
   async deleteAttractionPoint(id: number): Promise<boolean> {
-    return this.attractionPoints.delete(id);
+    const removed = this.attractionPoints.delete(id);
+    if (removed) this.onChange();
+    return removed;
   }
 
   async deleteAttractionPointsForUser(userId: string): Promise<void> {
@@ -241,6 +252,7 @@ export class MemStorage implements IStorage {
       .map(([id]) => id);
 
     idsToDelete.forEach((id) => this.attractionPoints.delete(id));
+    if (idsToDelete.length) this.onChange();
   }
 
   async getZones(userId: string): Promise<Zone[]> {
@@ -258,6 +270,7 @@ export class MemStorage implements IStorage {
       pointId: insertZone.pointId ?? null,
     };
     this.zones.set(id, zone);
+    this.onChange();
     return zone;
   }
 
@@ -269,6 +282,7 @@ export class MemStorage implements IStorage {
     zonesToDelete.forEach(([id]) => {
       this.zones.delete(id);
     });
+    if (zonesToDelete.length) this.onChange();
   }
 
   async createFeedback(entry: InsertFeedback): Promise<Feedback> {
@@ -281,6 +295,7 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
     };
     this.feedback.set(id, saved);
+    this.onChange();
     return saved;
   }
 
@@ -292,6 +307,7 @@ export class MemStorage implements IStorage {
     const existing = this.feedback.get(id);
     if (!existing) return false;
     this.feedback.set(id, { ...existing, comment });
+    this.onChange();
     return true;
   }
 
@@ -303,6 +319,7 @@ export class MemStorage implements IStorage {
 
   async createEvent(entry: InsertEvent): Promise<void> {
     this.events.push({ ...entry, createdAt: new Date() });
+    this.onChange();
   }
 
   async funnel(sinceDays: number): Promise<FunnelReport> {
@@ -355,6 +372,7 @@ export class MemStorage implements IStorage {
   async clearEvents(): Promise<number> {
     const removed = this.events.length;
     this.events = [];
+    this.onChange();
     return removed;
   }
 }
@@ -549,8 +567,3 @@ export class DbStorage implements IStorage {
   }
 }
 
-// Use Postgres when a database is configured, otherwise fall back to in-memory
-// storage (handy for local development without a database).
-export const storage: IStorage = process.env.DATABASE_URL
-  ? new DbStorage()
-  : new MemStorage();
