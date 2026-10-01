@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Fatera — выбор карты</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    max-width: 920px; margin: 0 auto; padding: 24px 16px 64px;
+    line-height: 1.5; background: #f7f8fa; color: #0f172a;
+  }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .hint { color: #64748b; font-size: 14px; }
+  .controls {
+    position: sticky; top: 0; z-index: 5; background: #f7f8fa;
+    padding: 14px 0; margin: 18px 0 8px; border-bottom: 1px solid #e2e8f0;
+    display: flex; gap: 18px; flex-wrap: wrap; align-items: center;
+  }
+  label { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; cursor: pointer; }
+  .card {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
+    overflow: hidden; margin: 18px 0;
+  }
+  .card header { padding: 14px 16px 12px; }
+  .name { font-weight: 650; font-size: 17px; }
+  .note { color: #64748b; font-size: 13px; margin-top: 3px; }
+  .tag {
+    display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px;
+    border-radius: 999px; margin-left: 8px; vertical-align: 2px;
+  }
+  .tag.now  { background: #f1f5f9; color: #475569; }
+  .tag.pick { background: #dcfce7; color: #166534; }
+
+  /* The map sample: a 2x2 block of real tiles, scaled to the card width. */
+  .sample { position: relative; width: 100%; aspect-ratio: 1 / 1; background: #e9edf2; }
+  .tiles {
+    position: absolute; inset: 0; display: grid;
+    grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+  }
+  .tiles img { width: 100%; height: 100%; display: block; }
+  .layer { position: absolute; inset: 0; }
+
+  /* A stand-in for a calculated zone, so the contrast can be judged. */
+  .zone { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .15s; }
+  .sample.withzone .zone { opacity: 1; }
+
+  .fail {
+    position: absolute; inset: 0; display: none; align-items: center;
+    justify-content: center; text-align: center; padding: 20px;
+    background: #fff1f2; color: #9f1239; font-size: 14px; font-weight: 600;
+  }
+  .sample.failed .fail { display: flex; }
+
+  footer { margin-top: 32px; font-size: 13px; color: #64748b;
+    border-top: 1px solid #e2e8f0; padding-top: 18px; }
+</style>
+</head>
+<body>
+
+<h1>Какую карту поставим</h1>
+<p class="hint">
+  Это настоящие куски карты Москвы, не рисунки. Если какой-то вариант у тебя
+  не прогрузился — он нам не подходит, значит он недоступен из России.
+  <b>Смотри без VPN.</b>
+</p>
+
+<div class="controls">
+  <label><input type="checkbox" id="zone" checked> Показать зону поверх карты</label>
+  <label><input type="checkbox" id="labels" checked> Показать названия улиц</label>
+</div>
+
+<div id="cards"></div>
+
+<footer>
+  Зона нарисована условно — важно не её форма, а насколько она читается
+  поверх карты. Карта не должна спорить с зоной за внимание.
+</footer>
+
+<script>
+  // One Moscow block, zoom 12: four tiles around the centre.
+  const Z = 12, X0 = 2475, Y0 = 1279;
+
+  // Esri serves tiles as /{z}/{y}/{x}; OSM as /{z}/{x}/{y}.
+  const esri = (service) => (x, y) =>
+    `https://server.arcgisonline.com/ArcGIS/rest/services/${service}/MapServer/tile/${Z}/${y}/${x}`;
+
+  const STYLES = [
+    {
+      name: "Как сейчас",
+      tag: "now",
+      tagText: "сейчас",
+      note: "OpenStreetMap. Все детали сразу: дома, дороги, магазины. Зона теряется в пестроте.",
+      base: (x, y) => `https://tile.openstreetmap.org/${Z}/${x}/${y}.png`,
+    },
+    {
+      name: "Светло-серая",
+      tag: "pick",
+      tagText: "рекомендую",
+      note: "Карта уходит на второй план, зона выходит на первый. Так делают почти все сервисы недвижимости.",
+      base: esri("Canvas/World_Light_Gray_Base"),
+      labels: esri("Canvas/World_Light_Gray_Reference"),
+    },
+    {
+      name: "Тёмная",
+      note: "То же самое, но ночное. Выглядит дорого, но на солнце с телефона читается хуже.",
+      base: esri("Canvas/World_Dark_Gray_Base"),
+      labels: esri("Canvas/World_Dark_Gray_Reference"),
+      dark: true,
+    },
+    {
+      name: "Спутник",
+      note: "Видно дворы, зелень и стройки. Красиво, но названий улиц почти нет, и грузится тяжелее.",
+      base: esri("World_Imagery"),
+      labels: esri("Reference/World_Boundaries_and_Places"),
+    },
+  ];
+
+  // A stand-in for a calculated zone: ragged like a real isochrone, and well
+  // short of the edges, so most of the map stays visible to judge.
+  const zoneSvg = (dark) => `
+    <svg class="zone" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <path d="M50 26 C58 24 66 28 70 34 C76 37 79 44 76 50
+               C78 57 73 63 66 64 C62 70 54 72 48 69
+               C41 71 34 67 32 61 C26 58 24 50 28 44
+               C28 36 36 29 44 29 Z"
+            fill="${dark ? "#38bdf8" : "#2563eb"}" fill-opacity="0.3"
+            stroke="${dark ? "#7dd3fc" : "#1d4ed8"}" stroke-width="1.2"/>
+      <circle cx="52" cy="47" r="2.2" fill="#ef4444" stroke="#fff" stroke-width=".9"/>
+      <circle cx="42" cy="57" r="2.2" fill="#ef4444" stroke="#fff" stroke-width=".9"/>
+      <circle cx="61" cy="40" r="2.2" fill="#ef4444" stroke="#fff" stroke-width=".9"/>
+    </svg>`;
+
+  const tileGrid = (url, cls) => {
+    let html = `<div class="tiles ${cls}">`;
+    for (let dy = 0; dy < 2; dy++) {
+      for (let dx = 0; dx < 2; dx++) {
+        html += `<img loading="lazy" alt="" src="${url(X0 + dx, Y0 + dy)}">`;
+      }
+    }
+    return html + "</div>";
+  };
+
+  document.getElementById("cards").innerHTML = STYLES.map((s) => `
+    <section class="card">
+      <header>
+        <div class="name">${s.name}${
+          s.tag ? `<span class="tag ${s.tag}">${s.tagText}</span>` : ""
+        }</div>
+        <div class="note">${s.note}</div>
+      </header>
+      <div class="sample withzone">
+        ${tileGrid(s.base, "base")}
+        ${s.labels ? `<div class="layer">${tileGrid(s.labels, "labels")}</div>` : ""}
+        ${zoneSvg(s.dark)}
+        <div class="fail">Не загрузилось — этот вариант нам не подходит</div>
+      </div>
+    </section>`).join("");
+
+  // A tile that fails to load marks its whole sample, so a blocked source is
+  // obvious instead of looking like an empty patch of map.
+  for (const img of document.images) {
+    img.addEventListener("error", () => {
+      img.closest(".sample")?.classList.add("failed");
+    });
+  }
+
+  const sampleClass = (id, cls) =>
+    document.getElementById(id).addEventListener("change", (e) => {
+      for (const el of document.querySelectorAll(cls)) {
+        if (cls === ".sample") el.classList.toggle("withzone", e.target.checked);
+        else el.style.display = e.target.checked ? "" : "none";
+      }
+    });
+
+  sampleClass("zone", ".sample");
+  sampleClass("labels", ".layer");
+</script>
+</body>
+</html>
