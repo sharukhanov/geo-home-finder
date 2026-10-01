@@ -10,174 +10,130 @@
   * { box-sizing: border-box; }
   body {
     font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-    max-width: 920px; margin: 0 auto; padding: 24px 16px 64px;
+    max-width: 880px; margin: 0 auto; padding: 24px 16px 64px;
     line-height: 1.5; background: #f7f8fa; color: #0f172a;
   }
-  h1 { font-size: 24px; margin: 0 0 4px; }
-  .hint { color: #64748b; font-size: 14px; }
-  .controls {
-    position: sticky; top: 0; z-index: 5; background: #f7f8fa;
-    padding: 14px 0; margin: 18px 0 8px; border-bottom: 1px solid #e2e8f0;
-    display: flex; gap: 18px; flex-wrap: wrap; align-items: center;
-  }
-  label { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; cursor: pointer; }
+  h1 { font-size: 24px; margin: 0 0 6px; }
+  h2 { font-size: 17px; margin: 34px 0 10px; }
+  .lead { color: #475569; font-size: 15px; margin: 0 0 4px; }
+
   .card {
     background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
-    overflow: hidden; margin: 18px 0;
+    overflow: hidden; margin: 16px 0;
   }
-  .card header { padding: 14px 16px 12px; }
+  .card.pick { border-color: #86efac; box-shadow: 0 0 0 3px #dcfce7; }
+  .card img { width: 100%; display: block; background: #e9edf2; }
+  .body { padding: 13px 16px 15px; }
   .name { font-weight: 650; font-size: 17px; }
-  .note { color: #64748b; font-size: 13px; margin-top: 3px; }
+  .note { color: #475569; font-size: 14px; margin-top: 4px; }
   .tag {
-    display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px;
+    display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px;
     border-radius: 999px; margin-left: 8px; vertical-align: 2px;
   }
   .tag.now  { background: #f1f5f9; color: #475569; }
   .tag.pick { background: #dcfce7; color: #166534; }
+  .tag.cost { background: #fef3c7; color: #92400e; }
 
-  /* The map sample: a 2x2 block of real tiles, scaled to the card width. */
-  .sample { position: relative; width: 100%; aspect-ratio: 1 / 1; background: #e9edf2; }
-  .tiles {
-    position: absolute; inset: 0; display: grid;
-    grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+  .probe {
+    margin-top: 11px; padding-top: 11px; border-top: 1px dashed #e2e8f0;
+    font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px;
   }
-  .tiles img { width: 100%; height: 100%; display: block; }
-  .layer { position: absolute; inset: 0; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1; flex: none; }
+  .probe.ok   { color: #166534; } .probe.ok   .dot { background: #22c55e; }
+  .probe.bad  { color: #9f1239; } .probe.bad  .dot { background: #e11d48; }
 
-  /* A stand-in for a calculated zone, so the contrast can be judged. */
-  .zone { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .15s; }
-  .sample.withzone .zone { opacity: 1; }
-
-  .fail {
-    position: absolute; inset: 0; display: none; align-items: center;
-    justify-content: center; text-align: center; padding: 20px;
-    background: #fff1f2; color: #9f1239; font-size: 14px; font-weight: 600;
-  }
-  .sample.failed .fail { display: flex; }
-
-  footer { margin-top: 32px; font-size: 13px; color: #64748b;
+  footer { margin-top: 34px; font-size: 13px; color: #64748b;
     border-top: 1px solid #e2e8f0; padding-top: 18px; }
+  code { background: #f1f5f9; padding: 1px 5px; border-radius: 5px; font-size: 12px; }
 </style>
 </head>
 <body>
 
 <h1>Какую карту поставим</h1>
-<p class="hint">
-  Это настоящие куски карты Москвы, не рисунки. Если какой-то вариант у тебя
-  не прогрузился — он нам не подходит, значит он недоступен из России.
-  <b>Смотри без VPN.</b>
+<p class="lead">
+  Один и тот же кусок Москвы, одна и та же зона поверх. Смотри не на красоту
+  карты, а на то, <b>насколько ясно видно зону</b> — ради неё люди и приходят.
 </p>
-
-<div class="controls">
-  <label><input type="checkbox" id="zone" checked> Показать зону поверх карты</label>
-  <label><input type="checkbox" id="labels" checked> Показать названия улиц</label>
-</div>
+<p class="lead">
+  Под каждым вариантом — живая проверка: грузится ли он у тебя прямо сейчас.
+  <b>Открывай без VPN</b>, иначе проверка ничего не значит.
+</p>
 
 <div id="cards"></div>
 
 <footer>
-  Зона нарисована условно — важно не её форма, а насколько она читается
-  поверх карты. Карта не должна спорить с зоной за внимание.
+  Картинки сняты заранее, поэтому они видны всегда. Доступность проверяется
+  отдельно, обращением к тому самому серверу, откуда карта грузилась бы
+  по-настоящему. Зона нарисована условно.
 </footer>
 
 <script>
-  // One Moscow block, zoom 12: four tiles around the centre.
-  const Z = 12, X0 = 2475, Y0 = 1279;
-
-  // Esri serves tiles as /{z}/{y}/{x}; OSM as /{z}/{x}/{y}.
-  const esri = (service) => (x, y) =>
-    `https://server.arcgisonline.com/ArcGIS/rest/services/${service}/MapServer/tile/${Z}/${y}/${x}`;
-
   const STYLES = [
     {
-      name: "Как сейчас",
-      tag: "now",
-      tagText: "сейчас",
-      note: "OpenStreetMap. Все детали сразу: дома, дороги, магазины. Зона теряется в пестроте.",
-      base: (x, y) => `https://tile.openstreetmap.org/${Z}/${x}/${y}.png`,
+      id: "osm", name: "Как сейчас", tag: "now", tagText: "сейчас",
+      note: "OpenStreetMap. Всё и сразу: дома, дороги, магазины, парки. Зона тонет в пестроте.",
+      probe: "https://tile.openstreetmap.org/12/2476/1280.png",
     },
     {
-      name: "Светло-серая",
-      tag: "pick",
-      tagText: "рекомендую",
-      note: "Карта уходит на второй план, зона выходит на первый. Так делают почти все сервисы недвижимости.",
-      base: esri("Canvas/World_Light_Gray_Base"),
-      labels: esri("Canvas/World_Light_Gray_Reference"),
+      id: "positron", name: "Positron", tag: "pick", tagText: "рекомендую", pick: true,
+      note: "Карта уходит назад, зона выходит вперёд. Бесплатно навсегда, без ключей, "
+          + "коммерческое использование разрешено. Векторная — не мылится при приближении.",
+      probe: "https://tiles.openfreemap.org/styles/positron",
     },
     {
-      name: "Тёмная",
-      note: "То же самое, но ночное. Выглядит дорого, но на солнце с телефона читается хуже.",
-      base: esri("Canvas/World_Dark_Gray_Base"),
-      labels: esri("Canvas/World_Dark_Gray_Reference"),
-      dark: true,
+      id: "liberty", name: "Liberty", tagText: "",
+      note: "Тот же сервис, но подробнее и ярче: видно дома и зелень. Середина между "
+          + "нынешней картой и Positron.",
+      probe: "https://tiles.openfreemap.org/styles/liberty",
     },
     {
-      name: "Спутник",
-      note: "Видно дворы, зелень и стройки. Красиво, но названий улиц почти нет, и грузится тяжелее.",
-      base: esri("World_Imagery"),
-      labels: esri("Reference/World_Boundaries_and_Places"),
+      id: "esrilight", name: "Esri светло-серая",
+      note: "Похоже на Positron, но обычными картинками. Ключ не нужен. Запасной вариант, "
+          + "если первые два у тебя не откроются.",
+      probe: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/12/1280/2476",
+    },
+    {
+      id: "dark", name: "Тёмная",
+      note: "Выглядит дорого. Но на солнце с телефона читается хуже, а большинство "
+          + "людей придут именно с телефона.",
+      probe: "https://tiles.openfreemap.org/styles/dark",
+    },
+    {
+      id: "sat", name: "Спутник", tag: "cost", tagText: "как доп.",
+      note: "Видно дворы, зелень и стройки. Названий улиц мало, грузится тяжелее. "
+          + "Хорошо не вместо карты, а переключателем рядом с ней.",
+      probe: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/12/1280/2476",
     },
   ];
 
-  // A stand-in for a calculated zone: ragged like a real isochrone, and well
-  // short of the edges, so most of the map stays visible to judge.
-  const zoneSvg = (dark) => `
-    <svg class="zone" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <path d="M50 26 C58 24 66 28 70 34 C76 37 79 44 76 50
-               C78 57 73 63 66 64 C62 70 54 72 48 69
-               C41 71 34 67 32 61 C26 58 24 50 28 44
-               C28 36 36 29 44 29 Z"
-            fill="${dark ? "#38bdf8" : "#2563eb"}" fill-opacity="0.3"
-            stroke="${dark ? "#7dd3fc" : "#1d4ed8"}" stroke-width="1.2"/>
-      <circle cx="52" cy="47" r="2.2" fill="#ef4444" stroke="#fff" stroke-width=".9"/>
-      <circle cx="42" cy="57" r="2.2" fill="#ef4444" stroke="#fff" stroke-width=".9"/>
-      <circle cx="61" cy="40" r="2.2" fill="#ef4444" stroke="#fff" stroke-width=".9"/>
-    </svg>`;
-
-  const tileGrid = (url, cls) => {
-    let html = `<div class="tiles ${cls}">`;
-    for (let dy = 0; dy < 2; dy++) {
-      for (let dx = 0; dx < 2; dx++) {
-        html += `<img loading="lazy" alt="" src="${url(X0 + dx, Y0 + dy)}">`;
-      }
-    }
-    return html + "</div>";
-  };
-
-  document.getElementById("cards").innerHTML = STYLES.map((s) => `
-    <section class="card">
-      <header>
+  document.getElementById("cards").innerHTML = STYLES.map((s, i) => `
+    <section class="card${s.pick ? " pick" : ""}">
+      <img src="map-samples/${s.id}.jpg" alt="${s.name}" loading="${i < 2 ? "eager" : "lazy"}">
+      <div class="body">
         <div class="name">${s.name}${
           s.tag ? `<span class="tag ${s.tag}">${s.tagText}</span>` : ""
         }</div>
         <div class="note">${s.note}</div>
-      </header>
-      <div class="sample withzone">
-        ${tileGrid(s.base, "base")}
-        ${s.labels ? `<div class="layer">${tileGrid(s.labels, "labels")}</div>` : ""}
-        ${zoneSvg(s.dark)}
-        <div class="fail">Не загрузилось — этот вариант нам не подходит</div>
+        <div class="probe" id="p-${s.id}"><span class="dot"></span>Проверяю доступность…</div>
       </div>
     </section>`).join("");
 
-  // A tile that fails to load marks its whole sample, so a blocked source is
-  // obvious instead of looking like an empty patch of map.
-  for (const img of document.images) {
-    img.addEventListener("error", () => {
-      img.closest(".sample")?.classList.add("failed");
+  // Ask each provider's own server for something real. `no-cors` means we never
+  // see the response, but the request still fails outright if the host is
+  // unreachable — which is the only thing being asked here.
+  for (const s of STYLES) {
+    const el = document.getElementById("p-" + s.id);
+    const started = Date.now();
+    fetch(s.probe + (s.probe.includes("?") ? "&" : "?") + "cb=" + started, {
+      mode: "no-cors", cache: "no-store",
+    }).then(() => {
+      el.className = "probe ok";
+      el.innerHTML = `<span class="dot"></span>Доступен (${Date.now() - started} мс)`;
+    }).catch(() => {
+      el.className = "probe bad";
+      el.innerHTML = `<span class="dot"></span>Не открывается — этот вариант не подходит`;
     });
   }
-
-  const sampleClass = (id, cls) =>
-    document.getElementById(id).addEventListener("change", (e) => {
-      for (const el of document.querySelectorAll(cls)) {
-        if (cls === ".sample") el.classList.toggle("withzone", e.target.checked);
-        else el.style.display = e.target.checked ? "" : "none";
-      }
-    });
-
-  sampleClass("zone", ".sample");
-  sampleClass("labels", ".layer");
 </script>
 </body>
 </html>
