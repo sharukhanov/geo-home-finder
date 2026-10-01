@@ -8,7 +8,7 @@ import { Onboarding } from "@/components/onboarding";
 import { ResetButton } from "@/components/reset-button";
 import { Methodology } from "@/components/methodology";
 import { Button } from "@/components/ui/button";
-import { MapPin, Menu, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { MapPin, Menu, Loader2, PanelLeftClose, PanelLeftOpen, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { getUserId } from "@/lib/user-id";
@@ -188,6 +188,21 @@ export default function Home() {
               />
             )}
 
+            {/* The explainer is reachable at any time, not only before the
+                first place is added — which is where it used to live, inside
+                a hint that disappeared as soon as it was acted on. On a phone
+                the label is dropped; the icon has to carry it. */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowOnboarding(true)}
+              aria-label="Как это работает"
+              title="Как это работает"
+            >
+              <HelpCircle className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Как это работает</span>
+            </Button>
+
             {/* Collapse the panel to see the whole map (desktop) */}
             <Button
               variant="outline"
@@ -252,7 +267,6 @@ export default function Home() {
             // sheet steps aside instead of covering the thing it just
             // produced. Harmless on desktop, where the panel is a sidebar.
             onPlaceAdded={() => setIsPanelOpen(false)}
-            onShowIntro={() => setShowOnboarding(true)}
           />
         </div>
       </div>
