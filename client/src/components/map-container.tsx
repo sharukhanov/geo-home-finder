@@ -7,10 +7,55 @@ import L from "leaflet";
 import markerIconUrl from "leaflet/dist/images/marker-icon.png";
 import markerIconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png";
 import markerShadowUrl from "leaflet/dist/images/marker-shadow.png";
+import type { ExpressionSpecification, Map as MapLibreMap } from "maplibre-gl";
 import type { MultiPolygon } from "geojson";
 import type { AttractionPoint, Zone } from "@shared/schema";
 import type { IsochroneFeature } from "@/lib/geo-types";
 import { cn } from "@/lib/utils";
+
+const VECTOR_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+
+/**
+ * Puts the Russian name first on every label that has one.
+ *
+ * The style ships bilingual labels with the latin form first, which reads as a
+ * foreign map to the people this is for: "Balashikha / Балашиха". Each label
+ * layer is rewritten to prefer `name:ru`, falling back to whatever the feature
+ * does have, so places without a Russian name still get a label rather than a
+ * blank.
+ */
+function preferRussianLabels(map: MapLibreMap): void {
+  const russianFirst: ExpressionSpecification = [
+    "coalesce",
+    ["get", "name:ru"],
+    ["get", "name"],
+    "",
+  ];
+  for (const layer of map.getStyle().layers ?? []) {
+    if (layer.type !== "symbol") continue;
+    // Not every symbol layer carries text — icon-only layers have no field,
+    // and setting one on them would print labels the style never intended.
+    if (!map.getLayoutProperty(layer.id, "text-field")) continue;
+    map.setLayoutProperty(layer.id, "text-field", russianFirst);
+  }
+}
+
+/**
+ * Pulls in the vector rendering engine and the Leaflet bridge.
+ *
+ * MapLibre does its tile decoding in a web worker, which it starts from a URL
+ * it works out at runtime. That guess does not survive bundling — the built
+ * app got "Worker failed to load" and an empty map — so the worker is imported
+ * as an asset of its own and handed over explicitly.
+ */
+async function loadVectorBasemap(): Promise<void> {
+  const [maplibregl, { default: workerUrl }] = await Promise.all([
+    import("maplibre-gl"),
+    import("maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url"),
+    import("@maplibre/maplibre-gl-leaflet"),
+  ]);
+  maplibregl.setWorkerUrl(workerUrl);
+}
 
 L.Icon.Default.mergeOptions({
   iconUrl: markerIconUrl,
@@ -54,22 +99,42 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
     // credit below stays — it is required by the map data licence.
     mapRef.current.attributionControl.setPrefix(false);
 
-    // Basemap. Defaults to OpenStreetMap, which needs no API key; CSS in
-    // index.css desaturates the tiles so the coloured zones stand out.
-    // Set VITE_MAP_TILE_URL (and VITE_MAP_ATTRIBUTION) to switch to a keyed
-    // provider such as CARTO or MapTiler without touching this code.
-    const tileUrl =
-      import.meta.env.VITE_MAP_TILE_URL ||
-      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-    const tileAttribution =
-      import.meta.env.VITE_MAP_ATTRIBUTION || '© OpenStreetMap contributors';
+    // Basemap.
+    //
+    // Default: OpenFreeMap's vector "liberty" style — no API key, no account,
+    // commercial use allowed, and vector, so it stays sharp at every zoom
+    // instead of going blurry between tile levels.
+    //
+    // Setting VITE_MAP_TILE_URL switches to plain raster tiles from that URL
+    // instead, which is the way back to OpenStreetMap (or to a keyed provider)
+    // if the vector host ever becomes unreachable. VITE_MAP_ATTRIBUTION goes
+    // with it; the credit is a licence condition, not decoration.
+    const rasterUrl = import.meta.env.VITE_MAP_TILE_URL;
+    let cancelled = false;
 
-    L.tileLayer(tileUrl, {
-      attribution: tileAttribution,
-      maxZoom: 19,
-    }).addTo(mapRef.current);
+    if (rasterUrl) {
+      L.tileLayer(rasterUrl, {
+        attribution:
+          import.meta.env.VITE_MAP_ATTRIBUTION || '© OpenStreetMap contributors',
+        maxZoom: 19,
+      }).addTo(mapRef.current);
+    } else {
+      // Loaded on demand: the rendering engine is larger than the rest of the
+      // app put together, and fetching it up front would hold up the first
+      // paint of everything else.
+      void loadVectorBasemap().then(() => {
+        const map = mapRef.current;
+        if (cancelled || !map) return;
+        const layer = L.maplibreGL({ style: VECTOR_STYLE_URL }).addTo(map);
+        // The credit is carried in the style and surfaced by the bridge, so
+        // adding it here too printed it twice.
+        const gl = layer.getMaplibreMap();
+        gl.on("load", () => preferRussianLabels(gl));
+      });
+    }
 
     return () => {
+      cancelled = true;
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
