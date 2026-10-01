@@ -17,8 +17,21 @@ import type { AttractionPoint, Zone } from "@shared/schema";
 import type { IsochroneFeature } from "@/lib/geo-types";
 import { cn } from "@/lib/utils";
 
-const VECTOR_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
-const RASTER_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+// Esri's topographic basemap: soft colours, buildings and greenery visible,
+// and quiet enough that a coloured zone on top still reads. No key, no
+// account. It is what this audience can actually reach — the vector basemap
+// below loads on desktop and not on Russian mobile networks, and a map that
+// differs by device is worse than a plain one that does not.
+const RASTER_TILE_URL =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}";
+const RASTER_ATTRIBUTION =
+  'Карта © <a href="https://www.esri.com" target="_blank" rel="noreferrer">Esri</a> и партнёры';
+
+// Opt-in, by setting VITE_MAP_VECTOR_STYLE to a style URL. OpenFreeMap's
+// "liberty" is sharper and carries Russian-only labels, but its server is not
+// reachable from much of Russia. Kept wired up for when the tiles can be
+// relayed through our own server, which would make it reachable for everyone.
+const VECTOR_STYLE_URL = import.meta.env.VITE_MAP_VECTOR_STYLE;
 
 /**
  * Puts the Russian name first on every label that has one.
@@ -63,6 +76,8 @@ const VECTOR_TIMEOUT_MS = 6000;
  * asset of its own and handed over explicitly.
  */
 async function upgradeToVectorBasemap(): Promise<StyleSpecification | null> {
+  if (!VECTOR_STYLE_URL) return null;
+
   let style: StyleSpecification;
   try {
     const res = await fetch(VECTOR_STYLE_URL, {
@@ -130,45 +145,36 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
     // credit below stays — it is required by the map data licence.
     mapRef.current.attributionControl.setPrefix(false);
 
-    // Basemap, in two stages.
+    // Basemap. Raster tiles by default, which every visitor can load; the
+    // vector style only when one is configured, and only once its own server
+    // has answered — a straight switch to it showed an empty grey screen to
+    // everyone whose network could not reach that host, with the zones
+    // floating over nothing.
     //
-    // Stage one, immediately: raster tiles. They need no extra code to arrive,
-    // so there is a map on screen from the first moment, and they come from a
-    // host this audience is known to reach.
-    //
-    // Stage two, if it can be had: OpenFreeMap's vector "liberty" style, which
-    // is sharper and quieter under the zones. It is swapped in only once its
-    // own server has actually answered — a straight switch showed an empty
-    // grey screen to everyone whose network cannot reach that host, with the
-    // zones floating over nothing.
-    //
-    // VITE_MAP_TILE_URL overrides the raster source; VITE_MAP_VECTOR_STYLE set
-    // to "off" skips stage two entirely. The credits are licence conditions,
-    // not decoration.
+    // VITE_MAP_TILE_URL and VITE_MAP_ATTRIBUTION override the raster source.
+    // The credits are licence conditions, not decoration.
     let cancelled = false;
 
     const raster = L.tileLayer(
       import.meta.env.VITE_MAP_TILE_URL || RASTER_TILE_URL,
       {
         attribution:
-          import.meta.env.VITE_MAP_ATTRIBUTION || "© OpenStreetMap contributors",
+          import.meta.env.VITE_MAP_ATTRIBUTION || RASTER_ATTRIBUTION,
         maxZoom: 19,
       },
     ).addTo(mapRef.current);
 
-    if (import.meta.env.VITE_MAP_VECTOR_STYLE !== "off") {
-      void upgradeToVectorBasemap().then((style) => {
-        const map = mapRef.current;
-        if (cancelled || !map || !style) return;
-        const gl = L.maplibreGL({ style }).addTo(map).getMaplibreMap();
-        gl.on("load", () => {
-          preferRussianLabels(gl);
-          // Only now: until the vector map has drawn something, removing the
-          // raster underneath would flash the empty page through.
-          map.removeLayer(raster);
-        });
+    void upgradeToVectorBasemap().then((style) => {
+      const map = mapRef.current;
+      if (cancelled || !map || !style) return;
+      const gl = L.maplibreGL({ style }).addTo(map).getMaplibreMap();
+      gl.on("load", () => {
+        preferRussianLabels(gl);
+        // Only now: until the vector map has drawn something, removing the
+        // raster underneath would flash the empty page through.
+        map.removeLayer(raster);
       });
-    }
+    });
 
     return () => {
       cancelled = true;
