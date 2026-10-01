@@ -46,11 +46,11 @@ export function Onboarding({ open, onClose, onShowMethodology }: OnboardingProps
           src="/onboarding-result.jpg"
           width={1720}
           height={1200}
-          alt="Карта Москвы: зелёным отмечены районы, откуда можно вовремя добраться и до работы, и до учёбы."
+          alt="Карта Москвы: зелёным отмечены районы, из которых и до работы в Сити, и до МГУ можно доехать на метро за 40 минут."
           // Capped against the viewport, not just the dialog: on a short
           // screen the full-ratio picture pushed the button below the fold,
           // and a dialog that scrolls does not look like one that scrolls.
-          className="w-full aspect-[43/30] max-h-[32vh] object-cover bg-slate-100"
+          className="w-full aspect-[43/30] max-h-[28vh] object-cover bg-slate-100"
         />
 
         <div className="px-6 pt-4 text-center">
@@ -60,8 +60,9 @@ export function Onboarding({ open, onClose, onShowMethodology }: OnboardingProps
             Зелёное — районы, откуда вы везде успеваете
           </DialogTitle>
           <p className="text-sm text-slate-600 mt-2">
-            Здесь человек работает в Сити и учится в МГУ. Жильё ему стоит
-            искать в зелёном — оттуда он успевает и туда, и туда.
+            Здесь человек работает в Сити, учится в МГУ и ездит на метро.
+            Зелёным — откуда он доедет и туда, и туда{"\u00A0"}за 40 минут.
+            Там ему и стоит искать жильё.
           </p>
         </div>
 
