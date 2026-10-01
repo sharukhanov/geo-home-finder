@@ -7,13 +7,18 @@ import L from "leaflet";
 import markerIconUrl from "leaflet/dist/images/marker-icon.png";
 import markerIconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png";
 import markerShadowUrl from "leaflet/dist/images/marker-shadow.png";
-import type { ExpressionSpecification, Map as MapLibreMap } from "maplibre-gl";
+import type {
+  ExpressionSpecification,
+  Map as MapLibreMap,
+  StyleSpecification,
+} from "maplibre-gl";
 import type { MultiPolygon } from "geojson";
 import type { AttractionPoint, Zone } from "@shared/schema";
 import type { IsochroneFeature } from "@/lib/geo-types";
 import { cn } from "@/lib/utils";
 
 const VECTOR_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+const RASTER_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 /**
  * Puts the Russian name first on every label that has one.
@@ -40,21 +45,47 @@ function preferRussianLabels(map: MapLibreMap): void {
   }
 }
 
+/** How long to wait for the vector host before giving up on it. */
+const VECTOR_TIMEOUT_MS = 6000;
+
 /**
- * Pulls in the vector rendering engine and the Leaflet bridge.
+ * Fetches the vector style and loads the engine that draws it, or resolves
+ * null if that cannot be done — in which case the raster basemap simply stays.
  *
- * MapLibre does its tile decoding in a web worker, which it starts from a URL
- * it works out at runtime. That guess does not survive bundling — the built
- * app got "Worker failed to load" and an empty map — so the worker is imported
- * as an asset of its own and handed over explicitly.
+ * The style is fetched first, and the already-parsed object is handed to
+ * MapLibre rather than the URL. That way one request decides the question: if
+ * the host is unreachable this returns null in a moment and nobody downloads a
+ * megabyte of renderer for a map that will never draw.
+ *
+ * MapLibre decodes tiles in a web worker, which it starts from a URL it works
+ * out at runtime. That guess does not survive bundling — the built app logged
+ * "Worker failed to load" and drew nothing — so the worker is imported as an
+ * asset of its own and handed over explicitly.
  */
-async function loadVectorBasemap(): Promise<void> {
-  const [maplibregl, { default: workerUrl }] = await Promise.all([
-    import("maplibre-gl"),
-    import("maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url"),
-    import("@maplibre/maplibre-gl-leaflet"),
-  ]);
-  maplibregl.setWorkerUrl(workerUrl);
+async function upgradeToVectorBasemap(): Promise<StyleSpecification | null> {
+  let style: StyleSpecification;
+  try {
+    const res = await fetch(VECTOR_STYLE_URL, {
+      signal: AbortSignal.timeout(VECTOR_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    style = (await res.json()) as StyleSpecification;
+  } catch {
+    // Blocked, offline, or too slow to be worth waiting for.
+    return null;
+  }
+
+  try {
+    const [maplibregl, { default: workerUrl }] = await Promise.all([
+      import("maplibre-gl"),
+      import("maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url"),
+      import("@maplibre/maplibre-gl-leaflet"),
+    ]);
+    maplibregl.setWorkerUrl(workerUrl);
+    return style;
+  } catch {
+    return null;
+  }
 }
 
 L.Icon.Default.mergeOptions({
@@ -99,37 +130,43 @@ export function MapContainer({ attractionPoints, zones, isochrones = [], optimal
     // credit below stays — it is required by the map data licence.
     mapRef.current.attributionControl.setPrefix(false);
 
-    // Basemap.
+    // Basemap, in two stages.
     //
-    // Default: OpenFreeMap's vector "liberty" style — no API key, no account,
-    // commercial use allowed, and vector, so it stays sharp at every zoom
-    // instead of going blurry between tile levels.
+    // Stage one, immediately: raster tiles. They need no extra code to arrive,
+    // so there is a map on screen from the first moment, and they come from a
+    // host this audience is known to reach.
     //
-    // Setting VITE_MAP_TILE_URL switches to plain raster tiles from that URL
-    // instead, which is the way back to OpenStreetMap (or to a keyed provider)
-    // if the vector host ever becomes unreachable. VITE_MAP_ATTRIBUTION goes
-    // with it; the credit is a licence condition, not decoration.
-    const rasterUrl = import.meta.env.VITE_MAP_TILE_URL;
+    // Stage two, if it can be had: OpenFreeMap's vector "liberty" style, which
+    // is sharper and quieter under the zones. It is swapped in only once its
+    // own server has actually answered — a straight switch showed an empty
+    // grey screen to everyone whose network cannot reach that host, with the
+    // zones floating over nothing.
+    //
+    // VITE_MAP_TILE_URL overrides the raster source; VITE_MAP_VECTOR_STYLE set
+    // to "off" skips stage two entirely. The credits are licence conditions,
+    // not decoration.
     let cancelled = false;
 
-    if (rasterUrl) {
-      L.tileLayer(rasterUrl, {
+    const raster = L.tileLayer(
+      import.meta.env.VITE_MAP_TILE_URL || RASTER_TILE_URL,
+      {
         attribution:
-          import.meta.env.VITE_MAP_ATTRIBUTION || '© OpenStreetMap contributors',
+          import.meta.env.VITE_MAP_ATTRIBUTION || "© OpenStreetMap contributors",
         maxZoom: 19,
-      }).addTo(mapRef.current);
-    } else {
-      // Loaded on demand: the rendering engine is larger than the rest of the
-      // app put together, and fetching it up front would hold up the first
-      // paint of everything else.
-      void loadVectorBasemap().then(() => {
+      },
+    ).addTo(mapRef.current);
+
+    if (import.meta.env.VITE_MAP_VECTOR_STYLE !== "off") {
+      void upgradeToVectorBasemap().then((style) => {
         const map = mapRef.current;
-        if (cancelled || !map) return;
-        const layer = L.maplibreGL({ style: VECTOR_STYLE_URL }).addTo(map);
-        // The credit is carried in the style and surfaced by the bridge, so
-        // adding it here too printed it twice.
-        const gl = layer.getMaplibreMap();
-        gl.on("load", () => preferRussianLabels(gl));
+        if (cancelled || !map || !style) return;
+        const gl = L.maplibreGL({ style }).addTo(map).getMaplibreMap();
+        gl.on("load", () => {
+          preferRussianLabels(gl);
+          // Only now: until the vector map has drawn something, removing the
+          // raster underneath would flash the empty page through.
+          map.removeLayer(raster);
+        });
       });
     }
 
